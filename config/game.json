@@ -1,0 +1,70 @@
+{
+  "version": "v1.1.0",
+  "balance": {
+    "baseHp": 110,
+    "baseDamage": 16,
+    "attackCooldown": 0.44,
+    "attackRange": 112,
+    "attackArc": 2.35,
+    "moveSpeed": 250,
+    "dashCooldown": 2.15,
+    "dashDuration": 0.17,
+    "dashSpeed": 620,
+    "dashDamageMul": 1.55,
+    "invulnTime": 0.86,
+    "magnetRadius": 96,
+    "roomHealRate": 0.055,
+    "critChance": 0.06,
+    "critMul": 2
+  },
+  "stageCfg": {
+    "roomsMin": 2,
+    "roomsMax": 4,
+    "bossEvery": 3,
+    "bossRooms": 3,
+    "finalStage": 30,
+    "storyStageCount": 30,
+    "normalWaves": 2,
+    "enemyCountBase": 4,
+    "enemyCountGrowth": 0.5,
+    "enemyWaveGain": 1,
+    "enemyCap": 12,
+    "hpGrowthPerStage": 0.3,
+    "damageGrowthPerStage": 0.11,
+    "speedGrowthPerStage": 0.02,
+    "speedCap": 1.26,
+    "dropCountBonusCap": 2,
+    "roomClearScore": 100,
+    "bossClearScore": 350,
+    "checkpointEveryStage": true,
+    "storyPromptEvery": 3
+  },
+  "modeList": ["easy", "hard", "hell", "story", "infinite"],
+  "modes": {
+    "easy": {
+      "id": "easy", "name": "简单", "label": "基准找猫", "color": "#7be0c1", "icon": "paw",
+      "desc": "怪物 ×1.0。适合第一次出门找猫。",
+      "hpMul": 1.0, "dmgMul": 1.0, "countMul": 1.0, "dropMul": 1.0, "mobility": 1, "story": false
+    },
+    "hard": {
+      "id": "hard", "name": "困难", "label": "猫爪见血", "color": "#ffb15e", "icon": "claw",
+      "desc": "怪物 HP / 伤害 ×1.8，数量略多。",
+      "hpMul": 1.8, "dmgMul": 1.8, "countMul": 1.12, "dropMul": 1.06, "mobility": 1, "story": false
+    },
+    "hell": {
+      "id": "hell", "name": "地狱", "label": "九条命都不够", "color": "#ff6f86", "icon": "fire",
+      "desc": "怪物 HP / 伤害 ×3.0。猫粮也救不了你。",
+      "hpMul": 3.0, "dmgMul": 3.0, "countMul": 1.22, "dropMul": 1.12, "mobility": 1, "story": false
+    },
+    "story": {
+      "id": "story", "name": "剧情模式", "label": "边找猫边听故事", "color": "#c4abff", "icon": "star",
+      "desc": "怪物 ×0.7；技能机动性减弱，但基础手感正常。",
+      "hpMul": 0.7, "dmgMul": 0.7, "countMul": 0.88, "dropMul": 0.9, "mobility": 0.78, "story": true
+    },
+    "infinite": {
+      "id": "infinite", "name": "无限模式", "label": "层数越高猫越怪", "color": "#78c9f7", "icon": "infinity",
+      "desc": "随层数递增，通关剧情模式后解锁。",
+      "hpMul": 1, "dmgMul": 1, "countMul": 1, "dropMul": 1, "mobility": 1, "story": false, "infinite": true
+    }
+  }
+}

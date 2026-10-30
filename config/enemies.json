@@ -1,0 +1,224 @@
+{
+  "chapterStages": 6,
+  "modules": [
+    {
+      "id": "candy", "name": "萌系软糖猫世界", "theme": "candy",
+      "title": "第 1 章 · 糖霜找猫现场",
+      "subtitle": "马卡龙配色、无辜表情、圆到不讲道理",
+      "mobs": ["gummy", "lollipop", "marshmallow", "jellybean", "caramelcrab"],
+      "boss": "pudding"
+    },
+    {
+      "id": "mech", "name": "机械 / 装甲世界", "theme": "mech",
+      "title": "第 2 章 · 齿轮与猫的联合工厂",
+      "subtitle": "冷色金属、铆钉、齿轮，连猫都是量产型",
+      "mobs": ["gearrat", "cannoncat", "ironpud", "drillspider", "batterycat"],
+      "boss": "mechking"
+    },
+    {
+      "id": "eldritch", "name": "诡异邪神世界", "theme": "eldritch",
+      "title": "第 3 章 · 万眼找猫深渊",
+      "subtitle": "触手、眼睛、暗紫荧光，越看越像猫",
+      "mobs": ["eyeball", "tentaclecat", "mouthcat", "spore", "whispercat"],
+      "boss": "eyebeast"
+    },
+    {
+      "id": "frost", "name": "永冻猫罐头世界", "theme": "frost",
+      "title": "第 4 章 · 零下找猫仓库",
+      "subtitle": "冰晶、冻鱼、雪堆，连呼出的气都在找猫",
+      "mobs": ["snowmite", "iceshard", "frostpuff", "sledhound", "snowman"],
+      "boss": "snowqueen"
+    },
+    {
+      "id": "void", "name": "虚空镜面世界", "theme": "void",
+      "title": "第 5 章 · 没有影子的镜子",
+      "subtitle": "反色、镜面、错位，谁在找谁已经说不清",
+      "mobs": ["voidling", "mirrorcat", "staticorb", "gloomhand", "paradoxpup"],
+      "boss": "voidmirror"
+    }
+  ],
+  "themes": [
+    {
+      "id": "candy", "name": "萌系软糖猫世界", "style": "candy",
+      "floorA": "#ffe8f1", "floorB": "#ffd6e7", "line": "#e6b9ce",
+      "wall": "#ff8fb1", "wallAlt": "#fff2f7", "ink": "#43233a",
+      "accent": "#ff6f9c", "decor": "#c987a4", "bg": "#2c1626", "glow": "#ffd1e2"
+    },
+    {
+      "id": "mech", "name": "机械 / 装甲世界", "style": "mech",
+      "floorA": "#cfd8e3", "floorB": "#b4c0cf", "line": "#8b98ab",
+      "wall": "#58708f", "wallAlt": "#aebdd0", "ink": "#1e2836",
+      "accent": "#67d6ff", "decor": "#6f86a3", "bg": "#121820", "glow": "#9fe8ff"
+    },
+    {
+      "id": "eldritch", "name": "诡异邪神世界", "style": "eldritch",
+      "floorA": "#3a2b4d", "floorB": "#31243f", "line": "#5e437c",
+      "wall": "#4b2f63", "wallAlt": "#6d4a8e", "ink": "#120a1c",
+      "accent": "#c47bff", "decor": "#8b5ab6", "bg": "#0d0714", "glow": "#d9a6ff"
+    },
+    {
+      "id": "frost", "name": "永冻猫罐头世界", "style": "frost",
+      "floorA": "#dff4ff", "floorB": "#c9e9fa", "line": "#9cc4dc",
+      "wall": "#7fa9c9", "wallAlt": "#eaf9ff", "ink": "#1b3448",
+      "accent": "#6fd6ff", "decor": "#8fb9d2", "bg": "#0e2130", "glow": "#d7f6ff"
+    },
+    {
+      "id": "void", "name": "虚空镜面世界", "style": "void",
+      "floorA": "#2a2340", "floorB": "#221c35", "line": "#514273",
+      "wall": "#3c2b5a", "wallAlt": "#6a4f96", "ink": "#0b0713",
+      "accent": "#d3b6ff", "decor": "#8d72bb", "bg": "#08050f", "glow": "#e0ccff"
+    }
+  ],
+  "defs": {
+    "gummy": {
+      "name": "软糖滚滚", "hp": 34, "speed": 76, "damage": 8, "radius": 27,
+      "score": 24, "drops": [2, 3], "knock": 0.8, "ai": "charger", "art": "gummy",
+      "color": "#ff9bc4", "projectile": "candy", "chapter": 1
+    },
+    "lollipop": {
+      "name": "棒棒糖猫", "hp": 26, "speed": 58, "damage": 7, "radius": 23,
+      "score": 27, "drops": [2, 3], "knock": 1, "ai": "ranged", "art": "lollipop",
+      "color": "#ffcf6e", "projectile": "candy", "chapter": 1
+    },
+    "marshmallow": {
+      "name": "棉花糖跳跳", "hp": 50, "speed": 72, "damage": 10, "radius": 30,
+      "score": 33, "drops": [3, 4], "knock": 0.7, "ai": "lunge", "art": "marshmallow",
+      "color": "#ffd6ef", "projectile": "candy", "chapter": 1
+    },
+    "jellybean": {
+      "name": "糖豆双子", "hp": 28, "speed": 104, "damage": 7, "radius": 24,
+      "score": 29, "drops": [2, 3], "knock": 1, "ai": "zigzag", "art": "jellybean",
+      "color": "#9fe8c8", "projectile": "candy", "chapter": 1
+    },
+    "caramelcrab": {
+      "name": "焦糖蟹猫", "hp": 46, "speed": 86, "damage": 9, "radius": 28,
+      "score": 36, "drops": [3, 4], "knock": 0.65, "ai": "charger", "art": "caramelcrab",
+      "color": "#e39a58", "projectile": "caramel", "chapter": 1
+    },
+    "pudding": {
+      "name": "巨型布丁猫", "hp": 480, "speed": 48, "damage": 18, "radius": 66,
+      "score": 340, "drops": [9, 12], "knock": 0.12, "ai": "bossPudding", "art": "pudding",
+      "color": "#ffd36b", "projectile": "caramel", "boss": true, "chapter": 1
+    },
+    "gearrat": {
+      "name": "齿轮鼠兵", "hp": 42, "speed": 90, "damage": 9, "radius": 24,
+      "score": 30, "drops": [2, 3], "knock": 0.8, "ai": "charger", "art": "gearrat",
+      "color": "#8fa7bd", "projectile": "gear", "chapter": 2
+    },
+    "cannoncat": {
+      "name": "炮筒猫", "hp": 36, "speed": 52, "damage": 10, "radius": 27,
+      "score": 34, "drops": [3, 4], "knock": 0.8, "ai": "ranged", "art": "cannoncat",
+      "color": "#6f8cab", "projectile": "shell", "chapter": 2
+    },
+    "ironpud": {
+      "name": "铁皮胖墩", "hp": 116, "speed": 30, "damage": 16, "radius": 38,
+      "score": 56, "drops": [3, 5], "knock": 0.35, "ai": "heavy", "art": "ironpud",
+      "color": "#8b9cb5", "projectile": "gear", "chapter": 2
+    },
+    "drillspider": {
+      "name": "电钻蛛", "hp": 46, "speed": 96, "damage": 11, "radius": 26,
+      "score": 38, "drops": [2, 4], "knock": 0.5, "ai": "drill", "art": "drillspider",
+      "color": "#7ddcf0", "projectile": "gear", "chapter": 2
+    },
+    "batterycat": {
+      "name": "电池猫", "hp": 54, "speed": 68, "damage": 11, "radius": 26,
+      "score": 42, "drops": [3, 4], "knock": 0.6, "ai": "bomber", "art": "batterycat",
+      "color": "#f4d35e", "projectile": "gear", "chapter": 2
+    },
+    "mechking": {
+      "name": "机械猫王", "hp": 640, "speed": 52, "damage": 22, "radius": 70,
+      "score": 420, "drops": [11, 15], "knock": 0.1, "ai": "bossMech", "art": "mechking",
+      "color": "#9fc7e8", "projectile": "shell", "boss": true, "chapter": 2
+    },
+    "eyeball": {
+      "name": "眼球团", "hp": 32, "speed": 60, "damage": 8, "radius": 25,
+      "score": 31, "drops": [2, 3], "knock": 0.8, "ai": "orbiter", "art": "eyeball",
+      "color": "#c28cff", "projectile": "eye", "chapter": 3
+    },
+    "tentaclecat": {
+      "name": "触手猫", "hp": 62, "speed": 64, "damage": 11, "radius": 30,
+      "score": 42, "drops": [3, 4], "knock": 0.6, "ai": "whip", "art": "tentaclecat",
+      "color": "#a46cd6", "projectile": "eye", "chapter": 3
+    },
+    "mouthcat": {
+      "name": "缺口猫", "hp": 58, "speed": 82, "damage": 12, "radius": 29,
+      "score": 44, "drops": [3, 4], "knock": 0.6, "ai": "lunge", "art": "mouthcat",
+      "color": "#7a4fa8", "projectile": "eye", "chapter": 3
+    },
+    "spore": {
+      "name": "荧光孢子", "hp": 26, "speed": 48, "damage": 7, "radius": 22,
+      "score": 27, "drops": [2, 3], "knock": 1, "ai": "orbiter", "art": "spore",
+      "color": "#86f7cf", "projectile": "spore", "chapter": 3
+    },
+    "whispercat": {
+      "name": "耳语猫", "hp": 44, "speed": 74, "damage": 10, "radius": 25,
+      "score": 39, "drops": [3, 4], "knock": 0.7, "ai": "teleporter", "art": "whispercat",
+      "color": "#bca2ff", "projectile": "ink", "chapter": 3
+    },
+    "eyebeast": {
+      "name": "万眼猫神", "hp": 780, "speed": 44, "damage": 24, "radius": 78,
+      "score": 500, "drops": [13, 17], "knock": 0.08, "ai": "bossEye", "art": "eyebeast",
+      "color": "#c37bff", "projectile": "eye", "boss": true, "chapter": 3
+    },
+    "snowmite": {
+      "name": "雪螨猫", "hp": 38, "speed": 94, "damage": 9, "radius": 22,
+      "score": 36, "drops": [2, 3], "knock": 0.9, "ai": "zigzag", "art": "snowmite",
+      "color": "#dff6ff", "projectile": "frost", "chapter": 4
+    },
+    "iceshard": {
+      "name": "冰棱猫", "hp": 48, "speed": 62, "damage": 12, "radius": 26,
+      "score": 43, "drops": [3, 4], "knock": 0.7, "ai": "charger", "art": "iceshard",
+      "color": "#9be3ff", "projectile": "frost", "chapter": 4
+    },
+    "frostpuff": {
+      "name": "霜团猫", "hp": 76, "speed": 44, "damage": 14, "radius": 32,
+      "score": 52, "drops": [3, 5], "knock": 0.4, "ai": "heavy", "art": "frostpuff",
+      "color": "#eafbff", "projectile": "frost", "chapter": 4
+    },
+    "sledhound": {
+      "name": "雪橇犬猫", "hp": 42, "speed": 122, "damage": 10, "radius": 24,
+      "score": 41, "drops": [2, 4], "knock": 0.8, "ai": "lunge", "art": "sledhound",
+      "color": "#b9d9ff", "projectile": "frost", "chapter": 4
+    },
+    "snowman": {
+      "name": "雪人猫", "hp": 84, "speed": 40, "damage": 13, "radius": 34,
+      "score": 56, "drops": [4, 5], "knock": 0.35, "ai": "bomber", "art": "snowman",
+      "color": "#ffffff", "projectile": "snow", "chapter": 4
+    },
+    "snowqueen": {
+      "name": "永冻猫女王", "hp": 900, "speed": 50, "damage": 26, "radius": 76,
+      "score": 560, "drops": [15, 20], "knock": 0.06, "ai": "bossSnow", "art": "snowqueen",
+      "color": "#c9f3ff", "projectile": "frost", "boss": true, "chapter": 4
+    },
+    "voidling": {
+      "name": "虚空崽", "hp": 40, "speed": 82, "damage": 10, "radius": 22,
+      "score": 38, "drops": [2, 3], "knock": 0.9, "ai": "orbiter", "art": "voidling",
+      "color": "#b18cff", "projectile": "void", "chapter": 5
+    },
+    "mirrorcat": {
+      "name": "镜面猫", "hp": 54, "speed": 70, "damage": 12, "radius": 26,
+      "score": 45, "drops": [3, 4], "knock": 0.7, "ai": "teleporter", "art": "mirrorcat",
+      "color": "#d3c4ff", "projectile": "mirror", "chapter": 5
+    },
+    "staticorb": {
+      "name": "静电球猫", "hp": 44, "speed": 46, "damage": 13, "radius": 25,
+      "score": 43, "drops": [3, 4], "knock": 0.8, "ai": "sniper", "art": "staticorb",
+      "color": "#8fe6ff", "projectile": "static", "chapter": 5
+    },
+    "gloomhand": {
+      "name": "暗影爪猫", "hp": 68, "speed": 56, "damage": 15, "radius": 29,
+      "score": 51, "drops": [3, 5], "knock": 0.5, "ai": "whip", "art": "gloomhand",
+      "color": "#7a5cbf", "projectile": "void", "chapter": 5
+    },
+    "paradoxpup": {
+      "name": "悖论猫崽", "hp": 58, "speed": 98, "damage": 11, "radius": 24,
+      "score": 47, "drops": [3, 4], "knock": 0.8, "ai": "roller", "art": "paradoxpup",
+      "color": "#ff9de2", "projectile": "mirror", "chapter": 5
+    },
+    "voidmirror": {
+      "name": "无面镜猫", "hp": 1120, "speed": 56, "damage": 30, "radius": 82,
+      "score": 640, "drops": [16, 22], "knock": 0.05, "ai": "bossVoid", "art": "voidmirror",
+      "color": "#c9b6ff", "projectile": "void", "boss": true, "chapter": 5
+    }
+  }
+}

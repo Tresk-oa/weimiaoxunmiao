@@ -1,0 +1,148 @@
+{
+  "chapters": [
+    {
+      "id": "ch01_mirror", "stage": 1, "title": "第 1 章 · 找猫第一天", "subtitle": "镜子坚持它才是本体",
+      "cast": ["player", "mirror"],
+      "lines": [
+        { "who": "旁白", "text": "找猫第一天。主角在客厅发现一面会说话的镜子。", "portrait": "mirror" },
+        { "who": "主角", "text": "你好，请问你是猫吗？", "portrait": "player" },
+        { "who": "镜子猫", "text": "废话。我才是本体。你只是我的镜面延迟。", "portrait": "mirror" },
+        { "who": "主角", "text": "那我为什么有影子？", "portrait": "player" },
+        { "who": "镜子猫", "text": "影子也可能在找猫。别问我，它今天没上班。", "portrait": "mirror" },
+        { "who": "旁白", "text": "他们大吵三百回合，最后决定一起找猫。", "portrait": "mirror" },
+        { "who": "旁白", "text": "后来主角才知道，宇宙被这桩悬案盘成了「找猫」的形状：星星是猫、引力是猫，连「为什么」本身也是一只猫。", "portrait": "mirror" },
+        { "who": "旁白", "text": "从此所有猫出厂自带同一项 KPI：去找另一只猫。", "portrait": "player" }
+      ]
+    },
+    {
+      "id": "ch02_star", "stage": 3, "title": "第 1 章 · 宇宙路灯", "subtitle": "星星猫正在值班（布丁猫已归档）",
+      "cast": ["player", "star"],
+      "lines": [
+        { "who": "旁白", "text": "1-3 的巨型布丁猫倒下后，主角撞见一颗正在值班的星星。", "portrait": "star" },
+        { "who": "星星猫", "text": "别挡路。我负责给宇宙当路灯。", "portrait": "star" },
+        { "who": "主角", "text": "为什么星星是猫？", "portrait": "player" },
+        { "who": "星星猫", "text": "因为黑暗里找不到猫。为什么不是？", "portrait": "star" },
+        { "who": "旁白 + 星星猫", "text": "达成共识：为喵，寻喵。", "portrait": "star" },
+        { "who": "悬案档案", "text": "第 1 页：案发现场只留下一块巨大的布丁，布丁声称自己不是猫。", "portrait": "archive" },
+        { "who": "主角", "text": "那它是什么？", "portrait": "player" },
+        { "who": "悬案档案", "text": "它说「我是甜点」。目前列为在逃猫。", "portrait": "archive" }
+      ]
+    },
+    {
+      "id": "ch03_case", "stage": 6, "title": "悬案档案 · 第 2 页", "subtitle": "目击者查无此猫",
+      "cast": ["archive", "player"],
+      "lines": [
+        { "who": "旁白", "text": "1-6 的 Boss 房清空后，档案柜自己打开了一页。", "portrait": "archive" },
+        { "who": "档案", "text": "新增线索：目击者是一只不存在的猫。", "portrait": "archive" },
+        { "who": "主角", "text": "不存在的猫也能目击？", "portrait": "player" },
+        { "who": "档案", "text": "它坚称自己看见了。看不见的部分由想象力补全。", "portrait": "archive" },
+        { "who": "档案", "text": "另：案发现场留下了一个更小的案发现场。", "portrait": "archive" },
+        { "who": "旁白", "text": "归档完毕。页码本身似乎也在找下一页码。", "portrait": "archive" }
+      ]
+    },
+    {
+      "id": "ch04_boss", "stage": 9, "title": "第 2 章 · 没脸的找猫狂", "subtitle": "Boss 临走前留下谜语",
+      "cast": ["player", "seeker"],
+      "lines": [
+        { "who": "旁白", "text": "2-3 的机械猫王倒下了。盔甲里传来熟悉的声音。", "portrait": "seeker" },
+        { "who": "找猫狂", "text": "我找猫找得太久，把自己的脸都找丢了，只好先装个机械的。", "portrait": "seeker" },
+        { "who": "找猫狂", "text": "临走送你一句谜语：你找的不是猫，是你还没承认的那只。", "portrait": "seeker" },
+        { "who": "主角", "text": "听不懂，但感觉很严重。", "portrait": "player" },
+        { "who": "旁白", "text": "这个宇宙里，唯一不是猫的东西，就是你还没找到的那只猫。", "portrait": "seeker" },
+        { "who": "旁白", "text": "法则只有一条：找到猫 → 进化成更离谱的猫 → 继续找下一只。", "portrait": "player" },
+        { "who": "找猫狂", "text": "别问宏大叙事，大家只是互相找，顺手干一架。", "portrait": "seeker" },
+        { "who": "悬案档案", "text": "第 3 页：嫌疑人已失踪。失踪方向也是猫形。", "portrait": "archive" }
+      ]
+    },
+    {
+      "id": "ch05_kibble", "stage": 12, "title": "第 2 章 · 猫粮的自证", "subtitle": "每一颗都是走丢的「我是猫」",
+      "cast": ["player", "kibble"],
+      "lines": [
+        { "who": "旁白", "text": "2-6 清场后，主角吸着猫粮，突然吸到一段记忆。", "portrait": "kibble" },
+        { "who": "猫粮光点", "text": "我不是零食。我是别的猫走丢的「我是猫」自证。", "portrait": "kibble" },
+        { "who": "主角", "text": "那我砍翻的那些怪呢？", "portrait": "player" },
+        { "who": "旁白", "text": "它们不是纯坏。它们是找猫找到走火入魔的同类。", "portrait": "player" },
+        { "who": "主角", "text": "所以我打的是同行？", "portrait": "player" },
+        { "who": "旁白", "text": "所谓这一款游戏，不过是一场谁也说不清谁在找谁的运动。运动名称暂定：《为喵寻喵》。", "portrait": "kibble" },
+        { "who": "悬案档案", "text": "第 4 页：猫粮证词互相矛盾，但都很好吃。", "portrait": "archive" }
+      ]
+    },
+    {
+      "id": "ch06_evolve", "stage": 15, "title": "第 3 章 · 镜子也在进化", "subtitle": "到底是谁在找谁",
+      "cast": ["player", "mirror"],
+      "lines": [
+        { "who": "旁白", "text": "3-3 的清场声还没散，主角发现自己又换了一身毛。", "portrait": "player" },
+        { "who": "主角", "text": "我越找越像猫了。", "portrait": "player" },
+        { "who": "镜子猫", "text": "也可能是我越找你，你才越像猫。", "portrait": "mirror" },
+        { "who": "主角", "text": "到底是我在找猫，还是猫在找我？", "portrait": "player" },
+        { "who": "镜子猫", "text": "你猜。", "portrait": "mirror" },
+        { "who": "旁白", "text": "主角决定先不猜，继续挥爪。毕竟 KPI 还没填。", "portrait": "player" },
+        { "who": "悬案档案", "text": "第 5 页：镜子里外各有一只猫，谁先眨眼谁先被找。", "portrait": "archive" }
+      ]
+    },
+    {
+      "id": "ch07_case", "stage": 18, "title": "悬案档案 · 第 6 页", "subtitle": "万眼猫神闭眼之后",
+      "cast": ["archive", "player"],
+      "lines": [
+        { "who": "旁白", "text": "3-6 的万眼猫神闭上最后一只眼，档案柜又响了一声。", "portrait": "archive" },
+        { "who": "悬案档案", "text": "第 6 页：所有目击者都指认同一只猫，但没人能说出它的颜色。", "portrait": "archive" },
+        { "who": "主角", "text": "那它总有个形状吧？", "portrait": "player" },
+        { "who": "悬案档案", "text": "形状是猫。颜色是「你猜」。", "portrait": "archive" },
+        { "who": "旁白", "text": "档案页角出现了一行小字：下一站，冰库。", "portrait": "archive" },
+        { "who": "主角", "text": "行吧。找猫找进冷库，也算专业对口。", "portrait": "player" }
+      ]
+    },
+    {
+      "id": "ch08_frost", "stage": 21, "title": "第 4 章 · 冷库里的猫叫", "subtitle": "呼出的气也在找猫",
+      "cast": ["player", "snowqueen"],
+      "lines": [
+        { "who": "旁白", "text": "4-3 的冰门打开，主角看见一位把自己冻在罐头里的猫女王。", "portrait": "snowqueen" },
+        { "who": "雪女王", "text": "别靠太近。我呼出的气会自己去找猫。", "portrait": "snowqueen" },
+        { "who": "主角", "text": "那它找到了吗？", "portrait": "player" },
+        { "who": "雪女王", "text": "找到了。它找到了我。所以我把自己冻起来，免得它继续找。", "portrait": "snowqueen" },
+        { "who": "主角", "text": "这逻辑比冰还硬。", "portrait": "player" },
+        { "who": "旁白", "text": "冷库深处传来一声很轻的猫叫。分不清是女王，还是女王呼出的气。", "portrait": "snowqueen" }
+      ]
+    },
+    {
+      "id": "ch09_case4", "stage": 24, "title": "悬案档案 · 第 7 页", "subtitle": "冻住的证词",
+      "cast": ["archive", "snowqueen"],
+      "lines": [
+        { "who": "旁白", "text": "4-6 的永冻猫女王碎成一地冰晶，档案柜冷得直冒白气。", "portrait": "archive" },
+        { "who": "悬案档案", "text": "第 7 页：女王留下的证词被冻住了，解冻后只剩一句。", "portrait": "archive" },
+        { "who": "雪女王", "text": "……别找猫。让猫来找你。", "portrait": "snowqueen" },
+        { "who": "主角", "text": "这算建议还是陷阱？", "portrait": "player" },
+        { "who": "悬案档案", "text": "已归档为「建议（疑似陷阱）」。", "portrait": "archive" },
+        { "who": "旁白", "text": "档案页角的小字变了：下一站，镜面背面。", "portrait": "archive" }
+      ]
+    },
+    {
+      "id": "ch10_void", "stage": 27, "title": "第 5 章 · 镜子背面", "subtitle": "谁在找谁已经说不清",
+      "cast": ["player", "voidmirror"],
+      "lines": [
+        { "who": "旁白", "text": "5-3 的镜面猫裂开，露出一张没有脸的倒影。", "portrait": "voidmirror" },
+        { "who": "无面镜猫", "text": "你终于来找我了。", "portrait": "voidmirror" },
+        { "who": "主角", "text": "等等，是你在找我？", "portrait": "player" },
+        { "who": "无面镜猫", "text": "不。是你在我里面找我。我只是负责把你找我的样子照出来。", "portrait": "voidmirror" },
+        { "who": "主角", "text": "那到底谁在找谁？", "portrait": "player" },
+        { "who": "无面镜猫", "text": "你猜。猜对了，镜子就碎了；猜错了，镜子还是碎的。", "portrait": "voidmirror" },
+        { "who": "旁白", "text": "主角第一次觉得，挥爪比想问题简单多了。", "portrait": "player" }
+      ]
+    },
+    {
+      "id": "ch11_final", "stage": 30, "title": "最终章 · 最初的镜子", "subtitle": "本局结束，悬案仍未告破", "final": true,
+      "cast": ["player", "mirror", "voidmirror"],
+      "lines": [
+        { "who": "旁白", "text": "5-6 之后，主角回到了最初的那面镜子前。", "portrait": "mirror" },
+        { "who": "主角", "text": "我到底是不是猫？", "portrait": "player" },
+        { "who": "镜子猫", "text": "你猜。", "portrait": "mirror" },
+        { "who": "旁白", "text": "镜子后面还是镜子，镜子里的猫也有一面镜子。", "portrait": "mirror" },
+        { "who": "无面镜猫", "text": "你在找我，我在找你。案卷上写的却是：谁在找谁。", "portrait": "voidmirror" },
+        { "who": "主角", "text": "那结案吗？", "portrait": "player" },
+        { "who": "镜子猫", "text": "不结。结案以后，猫粮 KPI 谁来填？", "portrait": "mirror" },
+        { "who": "旁白", "text": "画面陷入漫长回环。本局结束，悬案仍未告破。", "portrait": "mirror" },
+        { "who": "旁白", "text": "你猜。然后，重开一局，继续找。", "portrait": "voidmirror" }
+      ]
+    }
+  ]
+}
