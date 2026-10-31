@@ -1,5 +1,5 @@
 {
-  "version": "v1.1.1",
+  "version": "v1.1.2",
   "balance": {
     "baseHp": 110,
     "baseDamage": 16,
@@ -40,6 +40,7 @@
     "storyPromptEvery": 3
   },
   "modeList": ["easy", "hard", "hell", "story", "infinite"],
+  "modeCaps": { "easy": 20, "hard": 25, "hell": 30 },
   "modes": {
     "easy": {
       "id": "easy", "name": "简单", "label": "基准找猫", "color": "#7be0c1", "icon": "paw",
