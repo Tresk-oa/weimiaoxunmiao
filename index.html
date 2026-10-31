@@ -52,7 +52,7 @@
 </main>
 <script>
 /* =============================================================
-   为喵寻喵 / MEOW SEEKS MEOW  —  v1.1.0（联网版）
+   为喵寻喵 / MEOW SEEKS MEOW  —  v1.1.1（联网版）
    Canvas 游戏本体；图像、界面、音效仍全部程序化生成。
    世界观：宇宙起源于“我到底是不是猫”的悬案，所有猫都在找另一只猫。
    运行要求：必须通过 http(s) 访问，并在启动时联网拉取 config/*.json。
@@ -9972,7 +9972,7 @@ if (DEBUG_MODE) {
    - v1.1 技能系统 / 新敌人 / 第 4 形态（见 B/C/D 段）
    ================================================================== */
 
-const V11_VERSION_FALLBACK = 'v1.1.0';
+const V11_VERSION_FALLBACK = 'v1.1.1';
 const V11_CONFIG = {
   loaded: false, loading: false, error: '',
   gameVersion: null, changelog: null, loadedAt: 0, files: {},
@@ -10556,35 +10556,57 @@ function v11DrawSaveSelectScreen(g, t) {
   drawVolumePill(g);
 }
 
-/* ---------------- 更新日志 ---------------- */
+/* ---------------- 更新日志（v1.1.1 排版重构：结构化 + 自适应换行） ---------------- */
+let V11_CHANGELOG_LAYOUT = null; // 排版快照，供验收断言 / 调试接口读取
+
 function v11ChangelogRows() {
   const data = V11_CONFIG.changelog;
   if (!data || !Array.isArray(data.versions)) return [];
-  const rows = [];
-  const push = (text, kind, size, indent) => rows.push({ text, kind, size, indent });
+  const out = [];
   for (let vi = 0; vi < data.versions.length; vi++) {
     const ver = data.versions[vi];
     const current = ver.version === data.current || (vi === 0 && !data.current);
     const open = current || V11_PAGES.changelogOpen === ver.version;
-    push(`${ver.version}${current ? '  · 当前版本' : ''}    ${ver.date || ''}`, 'version', 18, 0);
-    if (!open) {
-      push('点击展开这一版的四组条目', 'hint', 10, 22);
-      continue;
-    }
+    const sections = [];
     const groups = [
       ['新增', ver.added, C.mint],
       ['优化', ver.improved, C.gold],
       ['修复', ver.fixed, C.coral],
       ['已知问题', ver.known, C.lavender],
     ];
-    for (const [label, arr, color] of groups) {
-      if (!Array.isArray(arr) || !arr.length) continue;
-      push(label, 'group', 12, 22);
-      for (const item of arr) push('· ' + item, 'item', 11, 40, color);
+    for (const [tag, arr, color] of groups) {
+      if (Array.isArray(arr) && arr.length) sections.push({ tag, color, items: arr.slice() });
     }
-    push('', 'space', 6, 0);
+    out.push({ version: ver.version, date: ver.date || '', current, open, sections });
   }
-  return rows;
+  return out;
+}
+
+/* 与 drawText 一致的字体公式：测量与最终绘制用同一套字体。 */
+function v11Font(size, weight) {
+  return `${weight || 600} ${size}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif`;
+}
+function v11TextWidth(g, text, size, weight) {
+  g.save();
+  g.font = v11Font(size, weight);
+  const w = g.measureText(text).width;
+  g.restore();
+  return w;
+}
+/* 逐字换行：长文本不溢出容器。 */
+function v11WrapLines(g, text, maxW, size, weight) {
+  g.save();
+  g.font = v11Font(size, weight);
+  const chars = Array.from(text);
+  const lines = [];
+  let line = '';
+  for (const ch of chars) {
+    if (g.measureText(line + ch).width > maxW && line) { lines.push(line); line = ch; }
+    else line += ch;
+  }
+  if (line) lines.push(line);
+  g.restore();
+  return lines;
 }
 
 function v11DrawChangelogScreen(g, t) {
@@ -10598,54 +10620,140 @@ function v11DrawChangelogScreen(g, t) {
   const back = v11PageHeader(g, '更新日志', '版本号 + 日期 + 新增 / 优化 / 修复 / 已知问题 · 最新版本置顶', '返回主页');
   V11_CHANGELOG_RECTS.push({ id: 'back', ...back });
 
-  const rows = v11ChangelogRows();
-  if (!rows.length) {
+  const versions = v11ChangelogRows();
+  if (!versions.length) {
     drawText(g, V11_CONFIG.loaded ? '更新日志 JSON 为空' : '更新日志尚未拉取', W / 2, 340, 16, C.cream, { align: 'center', weight: 800 });
     drawBannerAndToast(g, t);
+    V11_CHANGELOG_LAYOUT = { totalH: 0, maxScroll: 0, scroll: 0, versions: [], rows: [], area: null, textX: 0, textW: 0 };
     return;
   }
+
+  // —— 尺寸：触屏 / 窄屏按 compact 放大字号与行距，避免错位裁切 ——
+  const compact = v11CompactLayout();
+  const k = compact ? 1.12 : 1;
+  const vSize = Math.round(17 * k), vDateSize = Math.round(11 * k);
+  const gSize = Math.round(13 * k), iSize = Math.round(11 * k);
+  const vH = Math.round(48 * k);                                   // 版本头高
+  const gH = Math.round(30 * k);                                   // 分组头高
+  const iLH = Math.round(20 * k);                                  // 条目行高（字号 + 行距）
+  const gPad = Math.round(9 * k);                                  // 分组底部空隙
+  const vGap = Math.round(18 * k);                                 // 版本间空隙（分隔线居中）
+
   const area = { x: 56, y: 108, w: 1120, h: 560 };
-  let y = 0;
+  const barW = 6, barX = area.x + area.w - 16;                     // 右侧滚动条轨道
+  const textX = area.x + 26;
+  const textW = area.w - 26 - 26 - barW - 4;                       // 内容宽，与滚动条不冲突
+
+  // —— 第一遍：逐字换行排版，算总高 ——
   const laid = [];
-  for (const row of rows) {
-    if (row.kind === 'version') { y += row.size + 12; laid.push({ row, y }); y += 6; }
-    else if (row.kind === 'group') { laid.push({ row, y }); y += row.size + 10; }
-    else if (row.kind === 'item') { laid.push({ row, y }); y += row.size + 7; }
-    else if (row.kind === 'hint') { laid.push({ row, y }); y += row.size + 6; }
-    else { y += row.size; }
+  const verRects = [];
+  const dividers = [];
+  let y = 0;
+  for (let vi = 0; vi < versions.length; vi++) {
+    const ver = versions[vi];
+    verRects.push({ version: ver.version, open: ver.open, current: ver.current, y, h: vH });
+    laid.push({ kind: 'version', version: ver.version, date: ver.date, current: ver.current, y, h: vH });
+    y += vH;
+    if (!ver.open) {
+      laid.push({ kind: 'hint', text: '点击展开这一版的四组条目', y, h: Math.round(22 * k) });
+      y += Math.round(22 * k);
+    } else {
+      for (const sec of ver.sections) {
+        laid.push({ kind: 'group', tag: sec.tag, color: sec.color, y, h: gH });
+        y += gH;
+        for (const item of sec.items) {
+          const lines = v11WrapLines(g, '· ' + item, textW, iSize, 600);
+          laid.push({ kind: 'item', lines, color: sec.color, y, h: Math.max(1, lines.length) * iLH });
+          y += Math.max(1, lines.length) * iLH;
+        }
+        y += gPad;
+      }
+    }
+    if (vi < versions.length - 1) {
+      y += Math.round(vGap * .5);
+      dividers.push(y);
+      y += Math.round(vGap * .5);
+    }
   }
-  const totalH = y + 16;
+  const totalH = y + 10;
   const maxScroll = Math.max(0, totalH - area.h);
   V11_PAGES.changelogScroll = clamp(V11_PAGES.changelogScroll, 0, maxScroll);
+  const off = -V11_PAGES.changelogScroll;
 
-  // 滚动条
+  // 滚动条轨道 / 滑块（固定右侧，内容已为其留白）
   if (maxScroll > 0) {
-    fillRound(g, area.x + area.w - 12, area.y, 6, area.h, 3, withAlpha(C.ink, .5));
+    fillRound(g, barX, area.y, barW, area.h, 3, withAlpha(C.cream, .14));
     const thumbH = Math.max(36, area.h * area.h / totalH);
     const thumbY = area.y + (area.h - thumbH) * (V11_PAGES.changelogScroll / maxScroll);
-    fillRound(g, area.x + area.w - 12, thumbY, 6, thumbH, 3, withAlpha(C.gold, .6));
+    fillRound(g, barX, thumbY, barW, thumbH, 3, withAlpha(C.gold, .68));
   }
 
   g.save();
   roundRectPath(g, area.x, area.y, area.w, area.h, 14); g.clip();
-  const off = -V11_PAGES.changelogScroll;
-  for (const { row, y: ry } of laid) {
-    const yy = area.y + ry + off;
-    if (yy < area.y - 40 || yy > area.y + area.h + 40) continue;
+
+  for (const row of laid) {
+    const yy = area.y + row.y + off;
+    if (yy + row.h < area.y - 4 || yy > area.y + area.h + 4) continue;
     if (row.kind === 'version') {
-      const isCurrent = row.text.includes('当前版本');
-      fillRound(g, area.x, yy, area.w - 20, 32, 10, withAlpha(isCurrent ? C.gold : C.cream, isCurrent ? .16 : .06));
-      drawText(g, row.text, area.x + 14, yy + 17, 17, isCurrent ? C.gold : C.cream, { weight: 900 });
-      V11_CHANGELOG_RECTS.push({ id: 'version', version: row.text.split(' ')[0], x: area.x, y: yy, w: area.w - 20, h: 32 });
+      // 版本头：版本号 + 日期，级差明显；当前版本高亮带。
+      const bandH = row.h - 12;
+      fillRound(g, area.x + 10, yy + 5, area.w - 60, bandH, 12, withAlpha(row.current ? C.gold : C.cream, row.current ? .17 : .07));
+      drawText(g, row.version, textX, yy + row.h / 2 - 3, vSize, row.current ? C.gold : C.cream, { weight: 900 });
+      if (row.current) {
+        drawText(g, '◆ 当前版本', textX + v11TextWidth(g, row.version, vSize, 900) + 20, yy + row.h / 2 - 3, Math.round(11 * k), C.gold, { weight: 900 });
+      }
+      drawText(g, row.date, area.x + area.w - 58, yy + row.h / 2 - 3, vDateSize, withAlpha(C.cream, .55), { align: 'right', weight: 700 });
     } else if (row.kind === 'group') {
-      drawText(g, row.text, area.x + row.indent, yy + 8, 12, C.mint, { weight: 900 });
+      // 分组：色标 + 名称，右侧细分隔线。
+      fillRound(g, textX + 2, yy + row.h / 2 - 7, 8, 14, 4, row.color);
+      drawText(g, row.tag, textX + 20, yy + row.h / 2, gSize, row.color, { weight: 900 });
+      const lx = textX + 20 + v11TextWidth(g, row.tag, gSize, 900) + 14;
+      g.strokeStyle = withAlpha(row.color, .28); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(lx, yy + row.h / 2); g.lineTo(textX + textW + 8, yy + row.h / 2); g.stroke();
     } else if (row.kind === 'hint') {
-      drawText(g, row.text, area.x + row.indent, yy + 6, 10, withAlpha(C.cream, .45), { weight: 600 });
+      drawText(g, row.text, textX + 6, yy + row.h / 2, Math.round(10 * k), withAlpha(C.cream, .5), { weight: 600 });
     } else {
-      drawText(g, row.text, area.x + row.indent, yy + 6, 11, withAlpha(C.cream, .78), { weight: 600 });
+      for (let li = 0; li < row.lines.length; li++) {
+        const ly = yy + iLH * li + iLH / 2;
+        if (ly >= area.y - 10 && ly <= area.y + area.h + 10) {
+          drawText(g, row.lines[li], textX + 4, ly, iSize, withAlpha(C.cream, .8), { weight: 600 });
+        }
+      }
     }
   }
+
+  // 版本之间分隔线
+  for (const dy of dividers) {
+    const dyy = area.y + dy + off;
+    if (dyy < area.y + 2 || dyy > area.y + area.h - 2) continue;
+    g.strokeStyle = withAlpha(C.cream, .14); g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(area.x + 26, dyy); g.lineTo(area.x + area.w - 46, dyy); g.stroke();
+  }
   g.restore();
+
+  // 版本头点击展开矩形（绝对坐标，跟 _v11b 的展开/折叠逻辑兼容）。
+  for (const vr of verRects) {
+    V11_CHANGELOG_RECTS.push({
+      id: 'version', version: vr.version,
+      x: area.x, y: area.y + vr.y + off, w: area.w - barW, h: vr.h,
+    });
+  }
+
+  V11_CHANGELOG_LAYOUT = {
+    totalH, maxScroll, scroll: V11_PAGES.changelogScroll, k,
+    area: { x: area.x, y: area.y, w: area.w, h: area.h },
+    bar: { x: barX, w: barW },
+    textX, textW,
+    versions: verRects.map(v => ({ ...v })),
+    dividers: dividers.map(d => area.y + d + off),
+    rows: laid.map(r => ({
+      kind: r.kind,
+      y: area.y + r.y + off,
+      h: r.h,
+      lineCount: r.lines ? r.lines.length : (r.kind === 'version' || r.kind === 'group' ? 1 : 0),
+    })),
+  };
+
   drawText(g, '滚轮 / ↑↓ 翻页 · Esc 返回主页', W / 2, 692, 10, withAlpha(C.cream, .42), { align: 'center', weight: 700 });
   drawBannerAndToast(g, t);
 }
@@ -10849,6 +10957,24 @@ toggleFullscreen = function () {
 };
 
 /* ---------------- 设置页（新增日志入口 + 版本号） ---------------- */
+/* 手机操控滑杆（0.7×~1.5×）：数值来自 _v11f 层触控配置，即改即存。 */
+function v11TouchScaleSlider(g, x, y, w, key, accent) {
+  const v = V11_TOUCH_CFG[key];
+  const min = .7, max = 1.5;
+  const ratio = clamp((v - min) / (max - min), 0, 1);
+  const hover = pointRect(mouse, { x, y, w, h: 34 });
+  fillRound(g, x, y + 12, w, 10, 5, withAlpha(C.ink, .12));
+  fillRound(g, x, y + 12, w * ratio, 10, 5, accent);
+  const knobX = x + w * ratio;
+  circle(g, knobX, y + 17, hover ? 12 : 10, hover ? C.gold : accent, C.ink, 2.2);
+  drawPaw(g, knobX, y + 17, 5, withAlpha(C.ink, .55));
+  drawText(g, `×${v.toFixed(2)}`, x + w + 14, y + 17, 12, C.ink, { weight: 900 });
+  settingsRects.push({
+    type: key === 'joyScale' ? 'touchJoyScale' : 'touchRightScale',
+    x: x - 12, y: y - 2, w: w + 24, h: 38, trackX: x, trackW: w, min, max,
+  });
+}
+
 function v11DrawSettingsScreen(g, t) {
   const bg = g.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#1b1129');
@@ -10871,7 +10997,7 @@ function v11DrawSettingsScreen(g, t) {
   fillRound(g, -45, -9, 90, 18, 4, withAlpha('#fff2cf', .5)); g.restore();
 
   drawText(g, '调一调，喵', W / 2, py + 46, 34, C.ink, { align: 'center', weight: 900 });
-  drawText(g, '画面 / 全屏 / 帧数 / 音量 · 本机自动记住', W / 2, py + 78, 11, withAlpha(C.inkSoft, .72), { align: 'center', weight: 700 });
+  drawText(g, '画面 / 全屏 / 帧数 / 音量 / 手机操控 · 本机自动记住', W / 2, py + 78, 11, withAlpha(C.inkSoft, .72), { align: 'center', weight: 700 });
   g.strokeStyle = withAlpha(C.ink, .16); g.lineWidth = 2;
   g.beginPath(); g.moveTo(px + 54, py + 96); g.lineTo(px + pw - 54, py + 96); g.stroke();
 
@@ -10947,6 +11073,30 @@ function v11DrawSettingsScreen(g, t) {
   drawSettingSlider(g, ctlX, py + 422, ctlW, settings.sfxVolume, '音效', C.mint, 'sfx');
   drawSpeakerIcon(g, px + pw - 86, py + 439, 20, false, C.inkSoft);
 
+  // 手机操控（v1.1.1）：仅触屏设备显示；配置由 _v11f 层读取/保存。
+  if (IS_TOUCH_DEVICE) {
+    const tcx = px + 690; // 右列 x 起点 = 800
+    drawText(g, '手机操控', tcx, py + 124, 21, C.ink, { weight: 900 });
+    drawText(g, '仅触屏设备显示 · 大小 / 位置即改即存', tcx, py + 146, 10, withAlpha(C.inkSoft, .72), { weight: 700 });
+    drawText(g, '左摇杆大小', tcx, py + 172, 15, C.ink, { weight: 900 });
+    v11TouchScaleSlider(g, tcx, py + 180, 160, 'joyScale', C.coral);
+    drawText(g, '右按钮大小', tcx, py + 228, 15, C.ink, { weight: 900 });
+    v11TouchScaleSlider(g, tcx, py + 236, 160, 'rightScale', C.mint);
+    const posBtns = [
+      { type: 'touchEdit', value: 'joy', label: '左摇杆位置', x: tcx, y: py + 272, w: 170, h: 40 },
+      { type: 'touchEdit', value: 'right', label: '右按钮位置', x: tcx + 182, y: py + 272, w: 170, h: 40 },
+      { type: 'touchReset', label: '重置位置', x: tcx, y: py + 318, w: 170, h: 38 },
+    ];
+    for (const b of posBtns) {
+      const hov = pointRect(mouse, b);
+      fillRound(g, b.x, b.y, b.w, b.h, 11, hov ? C.cream : '#f2dfbd');
+      strokeRound(g, b.x, b.y, b.w, b.h, 11, C.ink, hov ? 2.6 : 1.6);
+      drawText(g, b.label, b.x + b.w / 2, b.y + b.h / 2, 13, C.ink, { align: 'center', weight: 900 });
+      settingsRects.push({ type: b.type, value: b.value, x: b.x, y: b.y, w: b.w, h: b.h });
+    }
+    drawText(g, '拖动时半屏内定位 · 不会压到 HUD', tcx, py + 372, 10, withAlpha(C.inkSoft, .6), { weight: 700 });
+  }
+
   drawText(g, '快捷键：[ 减音量 · ] 加音量 · M 静音 · F 全屏 · Esc 暂停 / 返回',
     W / 2, py + 494, 10, withAlpha(C.inkSoft, .64), { align: 'center', weight: 700 });
   if (settingsNotice) {
@@ -10966,7 +11116,7 @@ function v11DrawSettingsScreen(g, t) {
     { type: 'bestiary', label: '模型图鉴', x: px + 44, w: 200, accent: '#eed7ae' },
     { type: 'changelog', label: '更新日志', x: px + 258, w: 200, accent: '#d9c8ff' },
     { type: 'save', label: '保存设置', x: px + 472, w: 240, accent: C.gold },
-    { type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : '返回主页', x: px + 726, w: 290, accent: C.mint },
+    { type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : (settingsReturn === 'playing' ? '返回游戏' : '返回主页'), x: px + 726, w: 290, accent: C.mint },
   ];
   for (const b of buttons) {
     const r = { x: b.x, y: btnY, w: b.w, h: btnH };
@@ -11441,6 +11591,11 @@ handleDown = function (ev) {
       settingsDrag = hit.type;
       setSettingsSliderFromPointer(hit.type);
     } else if (hit.type === 'fullscreen') toggleFullscreen();
+    else if (hit.type === 'touchJoyScale' || hit.type === 'touchRightScale') {
+      settingsDrag = hit.type;
+      setSettingsSliderFromPointer(hit.type);
+    } else if (hit.type === 'touchEdit') { v11OpenTouchEdit(hit.value); }
+    else if (hit.type === 'touchReset') { v11ResetTouchCfg(); }
     else if (hit.type === 'save') saveSettingsWithNotice();
     else if (hit.type === 'bestiary') openBestiary();
     else if (hit.type === 'back') closeSettings();
@@ -14433,7 +14588,7 @@ buildRoomBackground = function (room) {
   const NYAN = window.__nyan;
 
   NYAN.version = v11Version();
-  NYAN.engine = 'v1.1.0-online';
+  NYAN.engine = 'v1.1.1-online';
   NYAN.debugReady = true;
 
   const cloneRect = r => (r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null);
@@ -14731,6 +14886,700 @@ buildRoomBackground = function (room) {
   };
 })();
 
+/* ==== _v11f.js ==== */
+/* ==================================================================
+   v1.1.1 LAYER · F：手机操控重构 / 战斗内设置 / 死亡页三按钮
+   ------------------------------------------------------------------
+   - §2 手机操控：左半屏浮动摇杆（按哪出哪）+ 右半屏攻击/冲刺按钮；
+     左右半屏独立、互不越界；设置页新增「手机操控」分组（大小缩放
+     0.7×~1.5× + 拖动定位 + localStorage 持久化）；多点触控。
+   - §3 战斗界面：HUD 右上角齿轮「设置」按钮 + T 键打开设置面板
+     （复用现有设置页，保留保存设置 / 返回游戏）。
+   - §4 死亡页三按钮：重启 / 保存后离开 / 不保存离开；「不保存」
+     会回滚到存档位磁盘数据（本次关卡自动检查点不保留）。
+   - 新增状态 'touchEdit'：拖动定位左/右控制区，Esc 返回设置。
+   - 桌面端不受影响：虚拟操控盘与手机操控设置仅触屏设备可见。
+   ================================================================== */
+
+/* ---------------- 触控配置（独立 localStorage 键） ---------------- */
+const V11_TOUCH_CFG_KEY = 'weimiaoxunmiao_touchcfg_v1';
+const V11_TOUCH_CFG_DEF = { joyScale: 1, joyAx: .11875, joyAy: .81111, rightScale: 1, rightAx: .9125, rightAy: .78611 };
+const V11_TOUCH_CFG = {};
+
+function v11LoadTouchCfg() {
+  Object.assign(V11_TOUCH_CFG, V11_TOUCH_CFG_DEF);
+  try {
+    const raw = localStorage.getItem(V11_TOUCH_CFG_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && typeof p === 'object') {
+        const num = (v, def, a, b) => { const n = Number(v); return Number.isFinite(n) ? clamp(n, a, b) : def; };
+        V11_TOUCH_CFG.joyScale = num(p.joyScale, 1, .7, 1.5);
+        V11_TOUCH_CFG.rightScale = num(p.rightScale, 1, .7, 1.5);
+        V11_TOUCH_CFG.joyAx = num(p.joyAx, V11_TOUCH_CFG_DEF.joyAx, 0, 1);
+        V11_TOUCH_CFG.joyAy = num(p.joyAy, V11_TOUCH_CFG_DEF.joyAy, 0, 1);
+        V11_TOUCH_CFG.rightAx = num(p.rightAx, V11_TOUCH_CFG_DEF.rightAx, 0, 1);
+        V11_TOUCH_CFG.rightAy = num(p.rightAy, V11_TOUCH_CFG_DEF.rightAy, 0, 1);
+      }
+    }
+  } catch (e) { /* 损坏的配置回退默认 */ }
+}
+function v11PersistTouchCfg() {
+  try {
+    localStorage.setItem(V11_TOUCH_CFG_KEY, JSON.stringify({
+      joyScale: V11_TOUCH_CFG.joyScale, joyAx: V11_TOUCH_CFG.joyAx, joyAy: V11_TOUCH_CFG.joyAy,
+      rightScale: V11_TOUCH_CFG.rightScale, rightAx: V11_TOUCH_CFG.rightAx, rightAy: V11_TOUCH_CFG.rightAy,
+    }));
+  } catch (e) { /* 忽略 */ }
+}
+
+/* ---------------- 布局计算（覆盖 v11SyncTouchLayout） ---------------- */
+const V11F_LEGACY_SYNC_TOUCH = v11SyncTouchLayout;
+v11SyncTouchLayout = function () {
+  const s = V11_TOUCH_CFG;
+  TOUCH_JOY.r = 76 * s.joyScale;
+  TOUCH_JOY.knob = 30 * s.joyScale;
+  TOUCH_ATTACK.r = 58 * s.rightScale;
+  TOUCH_DASH.r = 42 * s.rightScale;
+
+  // 锚点（逻辑坐标）先按配置换算，再按“半屏硬边界 + 避开 HUD”夹取。
+  TOUCH_JOY.x = s.joyAx * W;
+  TOUCH_JOY.y = s.joyAy * H;
+  TOUCH_ATTACK.x = s.rightAx * W;
+  TOUCH_ATTACK.y = s.rightAy * H;
+
+  // 左半区：摇杆整圆不得越过中线，中心最低 76 以避开 HUD 左面板。
+  const joyMinX = clamp(W / 2 - TOUCH_JOY.r, 76, W / 2 - 76);
+  TOUCH_JOY.x = clamp(TOUCH_JOY.x, 76, Math.max(76, joyMinX));
+  TOUCH_JOY.y = clamp(TOUCH_JOY.y, 150, H - 84);
+
+  // 右半区：攻击整圆不得越过中线。
+  TOUCH_ATTACK.x = clamp(TOUCH_ATTACK.x, Math.min(W / 2 + TOUCH_ATTACK.r, W - 76), W - 76);
+  TOUCH_ATTACK.y = clamp(TOUCH_ATTACK.y, 150, H - 96);
+
+  // 冲刺相对攻击偏移（−124, +68）× 缩放，同样夹在右半区。
+  TOUCH_DASH.x = clamp(TOUCH_ATTACK.x - 124 * s.rightScale, W / 2 + TOUCH_DASH.r, W - 76);
+  TOUCH_DASH.y = clamp(TOUCH_ATTACK.y + 68 * s.rightScale, 150, H - 96);
+
+  if (touchState.joyId === null) {
+    touchState.joyX = TOUCH_JOY.x;
+    touchState.joyY = TOUCH_JOY.y;
+    touchState.joyBaseX = TOUCH_JOY.x;
+    touchState.joyBaseY = TOUCH_JOY.y;
+  }
+};
+
+/* 修改配置 → 夹取 → 同步实体 → 写盘（拖动/滑杆/重置共用）。 */
+function v11ApplyTouchCfg() {
+  const s = V11_TOUCH_CFG;
+  s.joyScale = clamp(Math.round(s.joyScale * 20) / 20, .7, 1.5);
+  s.rightScale = clamp(Math.round(s.rightScale * 20) / 20, .7, 1.5);
+  s.joyAx = clamp(s.joyAx, 0, 1);
+  s.joyAy = clamp(s.joyAy, 0, 1);
+  s.rightAx = clamp(s.rightAx, 0, 1);
+  s.rightAy = clamp(s.rightAy, 0, 1);
+  v11PersistTouchCfg();
+  v11SyncTouchLayout();
+}
+function v11SetTouchScale(zone, v) {
+  if (zone === 'joy') V11_TOUCH_CFG.joyScale = v;
+  else V11_TOUCH_CFG.rightScale = v;
+  v11ApplyTouchCfg();
+}
+function v11ResetTouchCfg() {
+  Object.assign(V11_TOUCH_CFG, V11_TOUCH_CFG_DEF);
+  v11ApplyTouchCfg();
+  showToast('手机操控位置已重置为默认', C.mint, 2.0);
+}
+
+v11LoadTouchCfg();
+
+/* ---------------- 浮动摇杆（外扩触发） ---------------- */
+const V11F_LEGACY_UPDATE_JOY = updateJoystick;
+updateJoystick = function (pt) {
+  const active = touchState.joyId !== null;
+  const baseX = active ? touchState.joyBaseX : TOUCH_JOY.x;
+  const baseY = active ? touchState.joyBaseY : TOUCH_JOY.y;
+  let dx = pt.x - baseX, dy = pt.y - baseY;
+  const max = TOUCH_JOY.r - TOUCH_JOY.knob * .4;
+  const len = Math.hypot(dx, dy);
+  if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+  touchState.joyX = baseX + dx;
+  touchState.joyY = baseY + dy;
+  const mag = Math.min(1, len / max);
+  const nlen = Math.hypot(dx, dy);
+  const norm = nlen > .001 ? { x: dx / nlen, y: dy / nlen } : { x: 0, y: 0 };
+  touchState.vec.x = norm.x * mag;
+  touchState.vec.y = norm.y * mag;
+};
+
+const V11F_LEGACY_RELEASE_TOUCH = releaseTouchControls;
+releaseTouchControls = function () {
+  V11F_LEGACY_RELEASE_TOUCH();
+  touchState.joyBaseX = TOUCH_JOY.x;
+  touchState.joyBaseY = TOUCH_JOY.y;
+};
+
+const V11_HUD_GEAR = { x: 1150, y: 17, w: 46, h: 44 };
+const V11_GAMEOVER_RECTS = { restart: null, saveLeave: null, noSaveLeave: null };
+const V11_TE_RECTS = { done: null, reset: null };
+const V11_TE = { zone: 'joy', dragId: null };
+
+/* 齿轮图标：圆环 + 8 齿。 */
+function v11DrawGearIcon(g, x, y, r, color, ink) {
+  g.save();
+  g.translate(x, y);
+  g.fillStyle = withAlpha(color, .22);
+  for (let i = 0; i < 8; i++) {
+    const a = i * TAU / 8;
+    g.save();
+    g.rotate(a);
+    g.fillRect(-r * .14, -r * .95, r * .28, r * .36);
+    g.restore();
+  }
+  circle(g, 0, 0, r * .72, withAlpha(color, .3), ink, 2.4);
+  circle(g, 0, 0, r * .3, withAlpha(ink, .12), ink, 1.6);
+  g.restore();
+}
+
+/* ---------------- §3 HUD 齿轮 + 点击 ---------------- */
+const V11F_LEGACY_DRAW_HUD = drawHUD;
+drawHUD = function (g, t) {
+  V11F_LEGACY_DRAW_HUD(g, t);
+  if (!run || !player) return;
+  const hov = pointRect(mouse, V11_HUD_GEAR);
+  fillRound(g, V11_HUD_GEAR.x, V11_HUD_GEAR.y, V11_HUD_GEAR.w, V11_HUD_GEAR.h, 12,
+    hov ? withAlpha(C.gold, .22) : withAlpha(C.ink, .05));
+  strokeRound(g, V11_HUD_GEAR.x, V11_HUD_GEAR.y, V11_HUD_GEAR.w, V11_HUD_GEAR.h, 12,
+    withAlpha(C.ink, hov ? .5 : .18), hov ? 2.2 : 1.5);
+  v11DrawGearIcon(g, V11_HUD_GEAR.x + V11_HUD_GEAR.w / 2, V11_HUD_GEAR.y + V11_HUD_GEAR.h / 2, 15, C.goldDeep, C.ink);
+};
+
+/* ---------------- §3 openSettings / closeSettings 支持 'playing' ---------------- */
+const V11F_LEGACY_OPEN_SETTINGS = openSettings;
+openSettings = function (from) {
+  if (from === 'playing') {
+    settingsReturn = 'playing';
+    state = 'settings';
+    settingsDrag = null;
+    clearInput();
+    releaseTouchControls();
+    initAudio();
+    sfx('click');
+    return;
+  }
+  V11F_LEGACY_OPEN_SETTINGS(from);
+};
+
+const V11F_LEGACY_CLOSE_SETTINGS = closeSettings;
+closeSettings = function () {
+  if (settingsReturn === 'playing') {
+    state = 'playing';
+    settingsDrag = null;
+    clearInput();
+    persistSettings();
+    sfx('click');
+    return;
+  }
+  V11F_LEGACY_CLOSE_SETTINGS();
+};
+
+/* ---------------- §2 handleTouchStart：半区分区 + 外扩摇杆 ---------------- */
+const V11F_LEGACY_TOUCH_START = handleTouchStart;
+handleTouchStart = function (ev) {
+  ev.preventDefault();
+  touchState.lastTouchAt = performance.now();
+  touchState.usingTouch = true;
+  touchActive = true;
+  initAudio();
+  const pt = touchPoint(ev);
+
+  // 'touchEdit' 拖动定位：按钮点击 / 控制区拖动都在这里处理。
+  if (state === 'touchEdit') {
+    const hit = v11TouchEditHit(pt);
+    if (hit === 'done') { state = 'settings'; settingsDrag = null; clearInput(); sfx('click'); return; }
+    if (hit === 'reset') { v11ResetTouchCfg(); return; }
+    if (hit === 'joy' || hit === 'right') { V11_TE.zone = hit; V11_TE.dragId = ev.pointerId; }
+    return;
+  }
+
+  // 非战斗界面：交给共用 UI 点击逻辑。
+  if (state !== 'playing' && state !== 'transition') {
+    handleDown({ button: 0, clientX: ev.clientX, clientY: ev.clientY, preventDefault() {} });
+    return;
+  }
+
+  // 战斗界面：右上角齿轮 → 设置面板。
+  if (pointRect(pt, V11_HUD_GEAR)) {
+    openSettings('playing');
+    return;
+  }
+
+  // 左半屏（避开顶部 HUD）：任意位置按下即出摇杆；已有摇杆的手指不再重复。
+  if (pt.x < W / 2 && pt.y > 110) {
+    if (touchState.joyId === null) {
+      touchState.joyId = ev.pointerId;
+      touchState.joyBaseX = pt.x;
+      touchState.joyBaseY = pt.y;
+      updateJoystick(pt);
+    }
+    return;
+  }
+
+  // 右半屏：攻击 / 冲刺热区（命中半径随缩放扩大）；空白 = 朝方向挥爪。
+  if (touchState.attackId === null && Math.hypot(pt.x - TOUCH_ATTACK.x, pt.y - TOUCH_ATTACK.y) <= TOUCH_ATTACK.r + 18) {
+    touchState.attackId = ev.pointerId;
+    touchState.attackHeld = true;
+    return;
+  }
+  if (touchState.dashId === null && Math.hypot(pt.x - TOUCH_DASH.x, pt.y - TOUCH_DASH.y) <= TOUCH_DASH.r + 18) {
+    touchState.dashId = ev.pointerId;
+    if (clickCooldown <= 0 && state === 'playing') tryDash();
+    return;
+  }
+  mouse.x = clamp(pt.x, 0, W); mouse.y = clamp(pt.y, 0, H); mouse.inside = true;
+  if (player && !player.dead) {
+    player.aim = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    if (state === 'playing' && player.attackTimer <= 0) performAttack();
+  }
+};
+
+const V11F_LEGACY_TOUCH_MOVE = handleTouchMove;
+handleTouchMove = function (ev) {
+  if (state === 'touchEdit') {
+    ev.preventDefault();
+    if (V11_TE.dragId === ev.pointerId) v11TouchEditMove(touchPoint(ev));
+    return;
+  }
+  // 设置页里用触摸拖动滑杆：复用 mouse 系拖动逻辑。
+  if (state === 'settings' && settingsDrag) {
+    ev.preventDefault();
+    setSettingsSliderFromPointer(settingsDrag);
+    return;
+  }
+  V11F_LEGACY_TOUCH_MOVE(ev);
+};
+
+const V11F_LEGACY_TOUCH_END = handleTouchEnd;
+handleTouchEnd = function (ev) {
+  if (state === 'touchEdit') {
+    ev.preventDefault();
+    if (V11_TE.dragId === ev.pointerId) V11_TE.dragId = null;
+    return;
+  }
+  V11F_LEGACY_TOUCH_END(ev);
+};
+
+/* ---------------- 虚拟操控盘绘制（浮动摇杆） ---------------- */
+const V11F_LEGACY_DRAW_TOUCH = drawTouchControls;
+drawTouchControls = function (g, t) {
+  if (!IS_TOUCH_DEVICE) return;
+  if (!run || !player) return;
+  if (state === 'touchEdit') return;
+  g.save();
+  const active = touchState.joyId !== null;
+  const baseX = active ? touchState.joyBaseX : TOUCH_JOY.x;
+  const baseY = active ? touchState.joyBaseY : TOUCH_JOY.y;
+  // 摇杆底盘（跟着手指出）
+  g.globalAlpha = .32;
+  circle(g, baseX, baseY, TOUCH_JOY.r, withAlpha('#140c1f', .5), withAlpha(C.cream, .25), 2);
+  g.globalAlpha = .5;
+  circle(g, baseX, baseY, TOUCH_JOY.r * .62, null, withAlpha(C.cream, .25), 1.5);
+  const knobX = active ? touchState.joyX : baseX;
+  const knobY = active ? touchState.joyY : baseY;
+  g.globalAlpha = .62;
+  circle(g, knobX, knobY, TOUCH_JOY.knob, withAlpha(C.cream, .35), withAlpha(C.ink, .5), 2);
+  const paw = Math.max(12, Math.min(26, 18 * (TOUCH_JOY.r / 76)));
+  g.globalAlpha = .85;
+  drawPaw(g, knobX, knobY, paw, withAlpha(C.cream, .8));
+
+  // 攻击按钮
+  const atkDown = touchState.attackHeld;
+  g.globalAlpha = atkDown ? .9 : .55;
+  circle(g, TOUCH_ATTACK.x, TOUCH_ATTACK.y, TOUCH_ATTACK.r,
+    atkDown ? withAlpha(C.coral, .55) : withAlpha('#2a1838', .7), withAlpha(C.coral, .8), 3);
+  drawUpgradeIcon(g, TOUCH_ATTACK.x, TOUCH_ATTACK.y, 44 * (TOUCH_ATTACK.r / 58), 'claw', C.cream);
+  drawText(g, '攻击', TOUCH_ATTACK.x, TOUCH_ATTACK.y + TOUCH_ATTACK.r - 14, Math.max(10, 12 * (TOUCH_ATTACK.r / 58)), C.cream, { align: 'center', weight: 900 });
+
+  // 冲刺按钮
+  g.globalAlpha = .6;
+  circle(g, TOUCH_DASH.x, TOUCH_DASH.y, TOUCH_DASH.r, withAlpha('#2a1838', .7), withAlpha(C.mint, .8), 3);
+  drawUpgradeIcon(g, TOUCH_DASH.x, TOUCH_DASH.y, 30 * (TOUCH_DASH.r / 42), 'boot', C.mint);
+  drawText(g, '冲刺', TOUCH_DASH.x, TOUCH_DASH.y + TOUCH_DASH.r - 12, Math.max(10, 11 * (TOUCH_DASH.r / 42)), C.cream, { align: 'center', weight: 900 });
+  g.restore();
+
+  // 竖屏提示（不强制旋转）
+  if (window.innerHeight > window.innerWidth) {
+    fillRound(g, W / 2 - 190, 88, 380, 40, 14, withAlpha('#1b1029', .82));
+    strokeRound(g, W / 2 - 190, 88, 380, 40, 14, withAlpha(C.gold, .55), 2);
+    drawText(g, '建议横屏游玩 · 竖屏也能操作', W / 2, 108, 13, C.gold, { align: 'center', weight: 800 });
+  }
+};
+
+/* ---------------- §2 touchEdit：拖动定位控制区 ---------------- */
+function v11OpenTouchEdit(zone) {
+  V11_TE.zone = zone === 'right' ? 'right' : 'joy';
+  V11_TE.dragId = null;
+  state = 'touchEdit';
+  settingsDrag = null;
+  clearInput();
+  sfx('click');
+}
+
+function v11TouchEditMove(pt) {
+  if (V11_TE.zone === 'joy') {
+    V11_TOUCH_CFG.joyAx = pt.x / W;
+    V11_TOUCH_CFG.joyAy = pt.y / H;
+  } else {
+    V11_TOUCH_CFG.rightAx = pt.x / W;
+    V11_TOUCH_CFG.rightAy = pt.y / H;
+  }
+  v11ApplyTouchCfg();
+}
+
+function v11TouchEditHit(pt) {
+  if (V11_TE_RECTS.done && pointRect(pt, V11_TE_RECTS.done)) return 'done';
+  if (V11_TE_RECTS.reset && pointRect(pt, V11_TE_RECTS.reset)) return 'reset';
+  const joyR = Math.max(TOUCH_JOY.r + 42, 92);
+  if (Math.hypot(pt.x - TOUCH_JOY.x, pt.y - TOUCH_JOY.y) <= joyR) return 'joy';
+  const rightR = Math.max(TOUCH_ATTACK.r + 42, 84);
+  if (Math.hypot(pt.x - TOUCH_ATTACK.x, pt.y - TOUCH_ATTACK.y) <= rightR) return 'right';
+  return null;
+}
+
+function v11DrawTouchEdit(g, t) {
+  g.fillStyle = 'rgba(10,7,18,.9)'; g.fillRect(0, 0, W, H);
+  g.save(); g.globalAlpha = .12;
+  for (let i = 0; i < 14; i++) drawStar(g, 40 + ((i * 197) % 1200), 30 + ((i * 83) % 640), 4 + i % 4, 1.6, 5, C.gold, null, 0, t * .2 + i);
+  g.restore();
+
+  // 中线 + 半屏提示
+  g.save();
+  g.setLineDash([10, 12]);
+  g.strokeStyle = withAlpha(C.gold, .5); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
+  g.restore();
+  drawText(g, '左半屏 · 移动摇杆', W / 4, 150, 18, withAlpha(C.cream, .85), { align: 'center', weight: 900 });
+  drawText(g, '右半屏 · 技能 / 冲刺', W * 3 / 4, 150, 18, withAlpha(C.cream, .85), { align: 'center', weight: 900 });
+
+  // HUD 警戒带（顶部与底部）
+  g.save(); g.globalAlpha = .28;
+  g.fillStyle = C.coral; g.fillRect(0, 0, W, 108);
+  g.fillRect(0, H - 88, W, 88);
+  for (let i = 0; i < 4; i++) {
+    g.globalAlpha = .1 + i * .05;
+    g.fillStyle = C.cream;
+    g.fillRect(0, 102 + i * 2, W, 1);
+    g.fillRect(0, H - 88 + i * 2, W, 1);
+  }
+  g.restore();
+
+  // 控制区本体（真实尺寸/位置渲染）
+  const selJoy = V11_TE.zone === 'joy';
+  const selRight = V11_TE.zone === 'right';
+  if (selJoy) {
+    fillRound(g, TOUCH_JOY.x - TOUCH_JOY.r - 12, TOUCH_JOY.y - TOUCH_JOY.r - 12, (TOUCH_JOY.r + 12) * 2, (TOUCH_JOY.r + 12) * 2, 18, withAlpha(C.gold, .1));
+    strokeRound(g, TOUCH_JOY.x - TOUCH_JOY.r - 12, TOUCH_JOY.y - TOUCH_JOY.r - 12, (TOUCH_JOY.r + 12) * 2, (TOUCH_JOY.r + 12) * 2, 18, withAlpha(C.gold, .65), 2.5);
+  }
+  g.globalAlpha = .9;
+  circle(g, TOUCH_JOY.x, TOUCH_JOY.y, TOUCH_JOY.r, withAlpha('#140c1f', .5), withAlpha(C.cream, .4), 2.5);
+  drawPaw(g, TOUCH_JOY.x, TOUCH_JOY.y, Math.max(12, 18 * (TOUCH_JOY.r / 76)), withAlpha(C.cream, .8));
+  g.globalAlpha = 1;
+
+  if (selRight) {
+    fillRound(g, TOUCH_ATTACK.x - TOUCH_ATTACK.r - 12, TOUCH_ATTACK.y - TOUCH_ATTACK.r - 12, (TOUCH_ATTACK.r + 12) * 2, (TOUCH_ATTACK.r + 12) * 2, 18, withAlpha(C.mint, .1));
+    strokeRound(g, TOUCH_ATTACK.x - TOUCH_ATTACK.r - 12, TOUCH_ATTACK.y - TOUCH_ATTACK.r - 12, (TOUCH_ATTACK.r + 12) * 2, (TOUCH_ATTACK.r + 12) * 2, 18, withAlpha(C.mint, .65), 2.5);
+  }
+  circle(g, TOUCH_ATTACK.x, TOUCH_ATTACK.y, TOUCH_ATTACK.r, withAlpha('#2a1838', .8), withAlpha(C.coral, .8), 3);
+  drawUpgradeIcon(g, TOUCH_ATTACK.x, TOUCH_ATTACK.y, 44 * (TOUCH_ATTACK.r / 58), 'claw', C.cream);
+  circle(g, TOUCH_DASH.x, TOUCH_DASH.y, TOUCH_DASH.r, withAlpha('#2a1838', .8), withAlpha(C.mint, .8), 3);
+  drawUpgradeIcon(g, TOUCH_DASH.x, TOUCH_DASH.y, 30 * (TOUCH_DASH.r / 42), 'boot', C.mint);
+
+  // 底部按钮
+  V11_TE_RECTS.done = { x: W / 2 - 220, y: H - 76, w: 200, h: 52 };
+  V11_TE_RECTS.reset = { x: W / 2 + 20, y: H - 76, w: 200, h: 52 };
+  for (const [r, label, accent] of [[V11_TE_RECTS.done, '完成', C.mint], [V11_TE_RECTS.reset, '重置位置', C.gold]]) {
+    const hov = pointRect(mouse, r);
+    fillRound(g, r.x + 3, r.y + 4, r.w, r.h, 14, withAlpha(C.ink, .4));
+    fillRound(g, r.x, r.y, r.w, r.h, 14, hov ? C.cream : accent);
+    strokeRound(g, r.x, r.y, r.w, r.h, 14, C.ink, hov ? 3 : 2.2);
+    drawText(g, label, r.x + r.w / 2, r.y + r.h / 2, 17, C.ink, { align: 'center', weight: 900 });
+  }
+  drawText(g, '拖动选中区域实时调整位置 · Esc / 完成 返回设置', W / 2, H - 92, 11, withAlpha(C.cream, .55), { align: 'center', weight: 700 });
+  drawBannerAndToast(g, t);
+}
+
+/* ---------------- 顶层 draw 分发：新增 'touchEdit' ---------------- */
+const V11F_LEGACY_DRAW = draw;
+draw = function () {
+  if (state === 'touchEdit') {
+    ctx.clearRect(0, 0, W, H);
+    v11DrawTouchEdit(ctx, time);
+    v11PageCursor(Object.keys(V11_TE_RECTS).map(k => V11_TE_RECTS[k]));
+    drawVolumePill(ctx);
+    return;
+  }
+  V11F_LEGACY_DRAW();
+  // 死亡页三按钮的光标随动（基线只认旧的重启矩形）。
+  if (state === 'gameover') {
+    const hovAny = [V11_GAMEOVER_RECTS.restart, V11_GAMEOVER_RECTS.saveLeave, V11_GAMEOVER_RECTS.noSaveLeave]
+      .some(r => r && pointRect(mouse, r)) || pointRect(mouse, gameoverRestartRect);
+    canvas.style.cursor = hovAny ? 'pointer' : 'default';
+  }
+};
+
+/* ---------------- §2/§4 handleDown 覆盖：齿轮 / touchEdit / gameover ---------------- */
+const V11F_LEGACY_HANDLE_DOWN = handleDown;
+handleDown = function (ev) {
+  if (ev.button !== 0) return;
+  ev.preventDefault();
+  updatePointer(ev);
+  initAudio();
+  const st = state;
+
+  if (st === 'touchEdit') {
+    const hit = v11TouchEditHit(mouse);
+    if (hit === 'done') { state = 'settings'; settingsDrag = null; clearInput(); sfx('click'); }
+    else if (hit === 'reset') { v11ResetTouchCfg(); }
+    else if (hit === 'joy' || hit === 'right') { V11_TE.zone = hit; V11_TE.dragId = 'mouse'; }
+    return;
+  }
+
+  if (st === 'playing' && run && player && pointRect(mouse, V11_HUD_GEAR)) {
+    sfx('click');
+    openSettings('playing');
+    return;
+  }
+
+  if (st === 'gameover') {
+    if (pointRect(mouse, V11_GAMEOVER_RECTS.restart)) {
+      sfx('click');
+      restartCurrentStage();
+      clearInput();
+    } else if (pointRect(mouse, V11_GAMEOVER_RECTS.saveLeave)) {
+      sfx('click');
+      exitCurrentMode(true);
+    } else if (pointRect(mouse, V11_GAMEOVER_RECTS.noSaveLeave)) {
+      sfx('click');
+      exitCurrentMode(false);
+    }
+    return;
+  }
+
+  V11F_LEGACY_HANDLE_DOWN(ev);
+};
+
+/* ---------------- 键盘：T 开设置 / touchEdit Esc 返回 ---------------- */
+window.addEventListener('keydown', ev => {
+  if (ev.code === 'KeyT' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    if (state === 'playing') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      openSettings('playing');
+    }
+    return;
+  }
+  if (ev.code === 'Escape' && state === 'touchEdit') {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    state = 'settings';
+    settingsDrag = null;
+    clearInput();
+    sfx('click');
+  }
+}, true);
+
+/* 鼠标拖动触摸编辑：mousemove 时跟随，mouseup 结束。 */
+window.addEventListener('mousemove', () => {
+  if (state === 'touchEdit' && V11_TE.dragId === 'mouse') v11TouchEditMove({ x: mouse.x, y: mouse.y });
+});
+window.addEventListener('mouseup', () => {
+  if (V11_TE.dragId === 'mouse') V11_TE.dragId = null;
+});
+
+/* ---------------- §2 设置滑杆：支持 touchJoyScale / touchRightScale ---------------- */
+const V11F_LEGACY_SLIDER = setSettingsSliderFromPointer;
+setSettingsSliderFromPointer = function (type) {
+  if (type === 'touchJoyScale' || type === 'touchRightScale') {
+    const rect = settingsRects.find(r => r.type === type);
+    if (!rect) return;
+    const ratio = clamp((mouse.x - rect.trackX) / Math.max(1, rect.trackW), 0, 1);
+    let v = rect.min + (rect.max - rect.min) * ratio;
+    v = Math.round(v * 20) / 20;
+    v11SetTouchScale(type === 'touchJoyScale' ? 'joy' : 'right', v);
+    sfx('click');
+    return;
+  }
+  V11F_LEGACY_SLIDER(type);
+};
+
+/* ---------------- §4 死亡页三按钮（覆盖 drawDeathScreen） ---------------- */
+const V11F_LEGACY_DEATH = drawDeathScreen;
+drawDeathScreen = function (g, t) {
+  if (state !== 'gameover' || !run) {
+    V11F_LEGACY_DEATH(g, t);
+    return;
+  }
+
+  g.fillStyle = 'rgba(16,7,19,.84)'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 12; i++) {
+    const a = t * .7 + i * TAU / 12;
+    const x = 640 + Math.cos(a) * (260 + (i % 3) * 30);
+    const y = 340 + Math.sin(a * 1.4) * (140 + (i % 4) * 15);
+    g.globalAlpha = .16 + Math.sin(t * 2 + i) * .06;
+    drawFish(g, x, y, 8 + i % 4 * 2, null, C.mint, 1.5, a);
+    g.globalAlpha = 1;
+  }
+
+  panel(g, 240, 60, 800, 600, 28, '#fff3d9', C.ink, 6, 10);
+  drawText(g, 'ROUND OVER', W / 2, 96, 12, withAlpha(C.coralDeep, .75), { align: 'center', weight: 900 });
+  g.save(); g.translate(W / 2, 159);
+  g.globalAlpha = .25; ellipse(g, 0, 33, 50, 9, C.ink, null, 0);
+  g.globalAlpha = .72;
+  catEar(g, -42, -30, 25, 34, -.25, '#f1ecff', C.pink);
+  catEar(g, 42, -30, 25, 34, .25, '#f1ecff', C.pink);
+  ellipse(g, 0, 0, 52, 48, '#f1ecff', withAlpha(C.ink, .55), 3);
+  drawBeastEye(g, -18, -4, 12, 11, 0, 0, 'happy');
+  drawBeastEye(g, 18, -4, 12, 11, 0, 0, 'happy');
+  g.strokeStyle = C.ink; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(-11, 14); g.quadraticCurveTo(0, 22, 11, 14); g.stroke();
+  g.globalAlpha = .18;
+  for (let i = 0; i < 3; i++) ellipse(g, -16 + i * 16, 42, 10, 5, C.lavender, null, 0);
+  g.restore();
+
+  drawText(g, '这场猫生到这里', W / 2, 240, 36, C.ink, { align: 'center', weight: 900 });
+  drawText(g, '爪印会留下，下一只猫会更强。', W / 2, 270, 12, C.inkSoft, { align: 'center', weight: 700 });
+
+  const mpNow = modeProgressFor(run.mode);
+  const stats = [
+    ['到达关卡', stageLabel(run.stage, run.mode), C.coral],
+    ['当前模式', MODES[run.mode].name, C.coralDeep],
+    ['击杀数', formatNum(run.kills), C.goldDeep],
+    ['本局得分', formatNum(run.score), C.purple],
+  ];
+  const sw = 162, gap = 15, sxs = W / 2 - (sw * 4 + gap * 3) / 2;
+  for (let i = 0; i < stats.length; i++) {
+    const sx = sxs + i * (sw + gap);
+    fillRound(g, sx, 292, sw, 78, 15, i === 3 ? '#f6edff' : '#fff8e8');
+    strokeRound(g, sx, 292, sw, 78, 15, withAlpha(C.ink, .22), 2);
+    drawText(g, stats[i][0], sx + sw / 2, 314, 10, withAlpha(C.inkSoft, .7), { align: 'center', weight: 700 });
+    drawText(g, stats[i][1], sx + sw / 2, 346, 21, stats[i][2], { align: 'center', weight: 900 });
+  }
+
+  drawText(g, '本局 BUILD', W / 2, 388, 10, withAlpha(C.inkSoft, .62), { align: 'center', weight: 900 });
+  const entries = Object.entries(run.upgradeStacks || {});
+  if (!entries.length) {
+    drawText(g, '一只未曾装配任何怪招的猫猫（下次试试升级吧）', W / 2, 410, 10, withAlpha(C.inkSoft, .55), { align: 'center' });
+  } else {
+    let bx = W / 2 - Math.min(entries.length, 10) * 17;
+    for (let i = 0; i < entries.length && i < 10; i++) {
+      const u = SKILL_BY_ID[entries[i][0]];
+      if (!u) continue;
+      fillRound(g, bx - 14, 396, 28, 28, 8, withAlpha(u.color, .17));
+      drawUpgradeIcon(g, bx, 410, 18, entries[i][1] >= 4 ? u.mutateIcon : u.icon, u.color);
+      drawText(g, `Lv.${entries[i][1]}`, bx + 12, 399, 7, C.ink, { align: 'center', weight: 900 });
+      bx += 34;
+    }
+    drawText(g, `共 ${entries.reduce((s, e) => s + e[1], 0)} 层增益`, W / 2, 434, 9, withAlpha(C.inkSoft, .5), { align: 'center' });
+  }
+
+  fillRound(g, W / 2 - 260, 448, 520, 36, 12, withAlpha(C.gold, .12));
+  drawText(g, `本模式最佳 ${mpNow ? stageLabel(mpNow.bestStage || 1, run.mode) : stageLabel(run.stage, run.mode)}   ·   最高分 ${formatNum(meta.bestScore)}   ·   本局种子 ${run.seedHex}`,
+    W / 2, 466, 10, C.inkSoft, { align: 'center', weight: 700 });
+
+  // 三按钮：重启 / 保存后离开 / 不保存离开
+  const bw = 236, bh = 60, bgap = 30, by = 498;
+  const bx0 = (W - (bw * 3 + bgap * 2)) / 2;
+  V11_GAMEOVER_RECTS.restart = { x: bx0, y: by, w: bw, h: bh };
+  V11_GAMEOVER_RECTS.saveLeave = { x: bx0 + bw + bgap, y: by, w: bw, h: bh };
+  V11_GAMEOVER_RECTS.noSaveLeave = { x: bx0 + (bw + bgap) * 2, y: by, w: bw, h: bh };
+  const btnDefs = [
+    [V11_GAMEOVER_RECTS.restart, '重启', '本关重开 · 不保存', C.gold, 'paw'],
+    [V11_GAMEOVER_RECTS.saveLeave, '保存后离开', `写入存档位 ${activeSlot || '—'}`, C.mint, 'save'],
+    [V11_GAMEOVER_RECTS.noSaveLeave, '不保存离开', '本次进度不保留', C.coral, 'leave'],
+  ];
+  for (const [r, label, sub, accent] of btnDefs) {
+    const hov = pointRect(mouse, r);
+    fillRound(g, r.x + 4, r.y + 5, r.w, r.h, 16, withAlpha(C.ink, .32));
+    fillRound(g, r.x, r.y, r.w, r.h, 16, hov ? '#ffe9b8' : accent);
+    strokeRound(g, r.x, r.y, r.w, r.h, 16, C.ink, hov ? 3.6 : 2.8);
+    drawText(g, label, r.x + r.w / 2, r.y + 22, 19, C.ink, { align: 'center', weight: 900 });
+    drawText(g, sub, r.x + r.w / 2, r.y + 44, 9, withAlpha(C.ink, .62), { align: 'center', weight: 800 });
+  }
+
+  drawText(g, '重启 = 本关重开继续；保存后离开 = 写入当前存档位再返回主页；不保存离开 = 回到上次保存的进度',
+    W / 2, 584, 10, withAlpha(C.inkSoft, .66), { align: 'center', weight: 700 });
+  drawText(g, '死亡结束本局 · 每进入一关写入检查点，不保存离开会回滚到上次存档 · R / 回车 快速重启',
+    W / 2, 644, 9, withAlpha(C.inkSoft, .5), { align: 'center', weight: 600 });
+};
+
+/* ---------------- §4 退出当前模式：不保存 → 回滚槽位磁盘数据 ---------------- */
+function v11QuietRevertProfile() {
+  if (!activeSlot) return;
+  const res = readSlot(activeSlot);
+  if (!res.ok || res.empty) return; // 读不到就静默跳过，仍返回主页。
+  profile = res.profile;
+  meta = { kills: 0, bestStage: 0, bestScore: 0, runs: 0 };
+  syncMetaFromProfile();
+  storyProgress = { seen: Object.assign({}, profile.modes.story.seen || {}) };
+  refreshSlotCache();
+}
+
+const V11F_LEGACY_EXIT_MODE = exitCurrentMode;
+exitCurrentMode = function (saveFirst) {
+  if (saveFirst) {
+    V11F_LEGACY_EXIT_MODE(true);
+    return;
+  }
+  // 不保存：回到主页前把内存档案回滚到存档位磁盘数据，
+  // 本次关卡的自动检查点/统计都不保留。
+  v11QuietRevertProfile();
+  returnToHome();
+};
+
+/* 旧重启矩形与新「重启」按钮对齐（基线光标 / 键盘逻辑共用）。 */
+Object.assign(gameoverRestartRect, { x: 256, y: 498, w: 236, h: 60 });
+
+/* ---------------- 调试接口（供自动化验收） ---------------- */
+(function v11fDebug() {
+  if (!window.__nyan) return;
+  const NYAN = window.__nyan;
+  NYAN.v111 = {
+    touchCfg: function () { return Object.assign({}, V11_TOUCH_CFG); },
+    touchAnchors: function () {
+      return {
+        joy: { x: TOUCH_JOY.x, y: TOUCH_JOY.y, r: TOUCH_JOY.r },
+        attack: { x: TOUCH_ATTACK.x, y: TOUCH_ATTACK.y, r: TOUCH_ATTACK.r },
+        dash: { x: TOUCH_DASH.x, y: TOUCH_DASH.y, r: TOUCH_DASH.r },
+        joyActive: touchState.joyId !== null,
+        joyBase: { x: touchState.joyBaseX, y: touchState.joyBaseY },
+        vec: { x: touchState.vec.x, y: touchState.vec.y },
+      };
+    },
+    touchEditRect: function () {
+      return {
+        done: V11_TE_RECTS.done ? { x: V11_TE_RECTS.done.x, y: V11_TE_RECTS.done.y, w: V11_TE_RECTS.done.w, h: V11_TE_RECTS.done.h } : null,
+        reset: V11_TE_RECTS.reset ? { x: V11_TE_RECTS.reset.x, y: V11_TE_RECTS.reset.y, w: V11_TE_RECTS.reset.w, h: V11_TE_RECTS.reset.h } : null,
+      };
+    },
+    touchEditState: function () { return { active: state === 'touchEdit', zone: V11_TE.zone, dragId: V11_TE.dragId }; },
+    gameoverRects: function () {
+      const out = {};
+      for (const k of Object.keys(V11_GAMEOVER_RECTS)) {
+        const r = V11_GAMEOVER_RECTS[k];
+        out[k] = r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null;
+      }
+      return out;
+    },
+    hudGear: function () { return { x: V11_HUD_GEAR.x, y: V11_HUD_GEAR.y, w: V11_HUD_GEAR.w, h: V11_HUD_GEAR.h }; },
+    setTouchCfg: function (cfg) { if (cfg && typeof cfg === 'object') { Object.assign(V11_TOUCH_CFG, cfg); v11ApplyTouchCfg(); } return NYAN.v111.touchCfg(); },
+    resetTouchCfg: function () { v11ResetTouchCfg(); return NYAN.v111.touchCfg(); },
+    openTouchEdit: function (zone) { v11OpenTouchEdit(zone); return state; },
+    openSettingsFrom: function (from) { openSettings(from); return state; },
+    forceGameover: function () { if (run) { state = 'gameover'; } return state; },
+    changelogLayout: function () { return V11_CHANGELOG_LAYOUT || null; },
+  };
+})();
 /* ================= v1.1 ONLINE LAYER 注入结束 ================= */
 
 // 启动：先进入联网加载页，拉取 config/*.json 后才进入主页。
