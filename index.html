@@ -52,7 +52,7 @@
 </main>
 <script>
 /* =============================================================
-   为喵寻喵 / MEOW SEEKS MEOW  —  v1.1.2（联网版）
+   为喵寻喵 / MEOW SEEKS MEOW  —  v1.1.3（联网版）
    Canvas 游戏本体；图像、界面、音效仍全部程序化生成。
    世界观：宇宙起源于“我到底是不是猫”的悬案，所有猫都在找另一只猫。
    运行要求：必须通过 http(s) 访问，并在启动时联网拉取 config/*.json。
@@ -7062,10 +7062,14 @@ function drawHUD(g, t) {
   circle(g, 59, 49, 25, withAlpha(C.gold, .95), C.ink, 3);
   drawCatHead(g, 59, 50, 18, player.form || 0, t);
   drawText(g, `LV.${player.level}`, 105, 30, 21, C.ink, { line: 0, weight: 900 });
-  drawText(g, FORMS[player.form || 0].name, 194, 30, 14, C.inkSoft, { weight: 800 });
-  const nextForm = player.form < FORMS.length - 1 ? FORMS[player.form + 1] : null;
-  drawText(g, nextForm ? `下一形态 Lv.${nextForm.unlockLevel}` : '最终形态 · 虚空寻喵者', 429, 30, 9,
-    nextForm ? withAlpha(C.inkSoft, .7) : C.coral, { align: 'right', weight: 700 });
+  // v1.1.3：HUD 形态名改由共鸣流派推导；不再显示固定三阶的“下一形态 Lv.x”。
+  const hudForm = typeof v11hActiveSchoolForm === 'function' ? v11hActiveSchoolForm() : null;
+  drawText(g, hudForm ? hudForm.name : FORMS[player.form || 0].name, 194, 30, 14,
+    hudForm ? hudForm.color : C.inkSoft, { weight: 800 });
+  drawText(g, hudForm
+    ? (hudForm.tier >= 2 ? 'T2 · 双核心已进阶' : 'T1 · 双核心 Lv4 进阶')
+    : '未共鸣 · 底猫形态', 429, 30, 9,
+    hudForm ? withAlpha(hudForm.color, .9) : withAlpha(C.inkSoft, .7), { align: 'right', weight: 700 });
 
   const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
   drawText(g, 'HP', 104, 50, 9, C.inkSoft, { weight: 900 });
@@ -8755,13 +8759,17 @@ function drawExitConfirmScreen(g, t) {
 }
 
 function openBestiary() {
-  bestiaryReturn = state === 'paused' ? 'settings' : 'settings';
+  // 记住来源页：从设置页（含从暂停进入的设置页）进图鉴，返回设置页；从主页进，返回主页。
+  // 旧写法是两个分支都写 'settings'，导致主页进图鉴后点返回会跳到设置页。
+  bestiaryReturn = (state === 'settings' || state === 'paused') ? 'settings' : 'title';
   state = 'bestiary';
   clearInput();
   sfx('click');
 }
 function closeBestiary() {
-  state = bestiaryReturn === 'settings' ? 'settings' : 'title';
+  // v1.1.3：任意入口进图鉴，返回键统一回主页；bestiaryReturn 仅保留记录。
+  bestiaryReturn = 'title';
+  state = 'title';
   clearInput();
   sfx('click');
 }
@@ -9972,7 +9980,7 @@ if (DEBUG_MODE) {
    - v1.1 技能系统 / 新敌人 / 第 4 形态（见 B/C/D 段）
    ================================================================== */
 
-const V11_VERSION_FALLBACK = 'v1.1.2';
+const V11_VERSION_FALLBACK = 'v1.1.3';
 const V11_CONFIG = {
   loaded: false, loading: false, error: '',
   gameVersion: null, changelog: null, loadedAt: 0, files: {},
@@ -9983,7 +9991,7 @@ const V11_PAGES = {
 };
 const V11_FS = { pseudo: false, electron: false };
 const V11_VIEW = { k: 1, cssW: W, cssH: H };
-const V11_BG = { img: null, ready: false, failed: false };
+const V11_BG = { img: null, ready: false, failed: false, source: '', offscreen: null };
 
 const V11_HOME_RECTS = { start: null, save: null, settings: null, bestiary: null, changelog: null, exit: null };
 const V11_MODE_RECTS = [];
@@ -10138,8 +10146,10 @@ async function v11BootGame() {
   V11_CONFIG.error = '';
   state = 'loading';
   V11_PAGES.pendingMode = null;
+  v11EnsureBackground();
   try {
-    await v11LoadRemoteConfig();
+    // 配置与背景并行：背景最多等 1200ms，超时直接放行进主页（图片失败走渐变兜底）。
+    await Promise.all([v11LoadRemoteConfig(), v11BgWait(1200)]);
     state = 'title';
     const hint = lastSlotHint();
     if (hint) activateProfile(hint, true);
@@ -10211,42 +10221,107 @@ function v11DrawOfflineScreen(g, t) {
   drawText(g, '版本 ' + v11Version(), W / 2, 626, 10, withAlpha(C.cream, .4), { align: 'center', weight: 700 });
 }
 
-/* ---------------- 主页背景（可替换图片） ---------------- */
-function v11EnsureBackground() {
-  if (V11_BG.img || V11_BG.failed) return;
+/* ---------------- 主页背景（可替换图片） ----------------
+   v1.1.3：
+   - 先加载 assets/bg_main.webp（1600×900，~100KB），onerror 回落 bg_main.png；
+   - onload 不直接置 ready，先用 img.decode() 预解码，避免主页首帧解码卡顿；
+   - ready 后一次性预渲染到 1280×720 离屏单例，drawHomeBackdrop 每帧只 drawImage；
+   - 图片缺失/断网/404 时 V11_BG.failed=true，走渐变兜底，不白屏。 */
+function v11BgBuildOffscreen() {
+  if (V11_BG.offscreen || !V11_BG.ready || !V11_BG.img) return;
   try {
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => { V11_BG.ready = true; };
-    img.onerror = () => { V11_BG.failed = true; V11_BG.ready = false; };
-    img.src = 'assets/bg_main.png';
-    V11_BG.img = img;
-  } catch (e) { V11_BG.failed = true; }
-}
-
-function v11DrawHomeBackdrop(g, t) {
-  v11EnsureBackground();
-  // 兜底渐变：图片缺失/失败时也不会白屏。
-  const fallback = g.createLinearGradient(0, 0, W, H);
-  fallback.addColorStop(0, '#2a1736');
-  fallback.addColorStop(.42, '#3d2347');
-  fallback.addColorStop(.72, '#2d1c3c');
-  fallback.addColorStop(1, '#14101f');
-  g.fillStyle = fallback; g.fillRect(0, 0, W, H);
-  if (V11_BG.ready && V11_BG.img) {
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    if (!x) return;
     const img = V11_BG.img;
     const cover = Math.max(W / img.width, H / img.height);
     const dw = img.width * cover, dh = img.height * cover;
-    g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    V11_BG.offscreen = c;
+  } catch (e) { V11_BG.offscreen = null; }
+}
+
+function v11BgMarkReady() {
+  if (V11_BG.ready) return;
+  V11_BG.ready = true;
+  V11_BG.failed = false;
+  v11BgBuildOffscreen();
+}
+
+function v11EnsureBackground() {
+  if (V11_BG.img || V11_BG.failed) return V11_BG.img;
+  try {
+    const img = new Image();
+    let usingPng = false;
+    img.decoding = 'async';
+    img.onload = () => {
+      // v1.1.3：onload 不直接置 ready，先 decode() 预解码再置。
+      if (typeof img.decode === 'function') img.decode().then(v11BgMarkReady, v11BgMarkReady);
+      else v11BgMarkReady();
+    };
+    img.onerror = () => {
+      if (!usingPng) {
+        usingPng = true;
+        V11_BG.source = 'assets/bg_main.png';
+        img.src = 'assets/bg_main.png';
+        return;
+      }
+      V11_BG.failed = true;
+      V11_BG.ready = false;
+    };
+    V11_BG.source = 'assets/bg_main.webp';
+    img.src = 'assets/bg_main.webp';
+    V11_BG.img = img;
+    return img;
+  } catch (e) { V11_BG.failed = true; return null; }
+}
+
+/* loading 最多等图 1200ms，超时放行；图片已 failed 时立即返回。 */
+async function v11BgWait(maxMs) {
+  if (V11_BG.ready || V11_BG.failed) return V11_BG.ready;
+  v11EnsureBackground();
+  if (V11_BG.ready || V11_BG.failed) return V11_BG.ready;
+  const limit = maxMs == null ? 1200 : maxMs;
+  const t0 = Date.now();
+  while (!V11_BG.ready && !V11_BG.failed) {
+    if (Date.now() - t0 >= limit) break;
+    await new Promise(r => setTimeout(r, 40));
+  }
+  return V11_BG.ready;
+}
+
+v11EnsureBackground();
+
+function v11DrawHomeBackdrop(g, t) {
+  // 兜底渐变：图片缺失/失败时也不会白屏。
+  if (V11_BG.ready && V11_BG.offscreen) {
+    // v1.1.3：ready 后每帧只 drawImage 离屏单例，不再缩放 1600×900 原图。
+    g.drawImage(V11_BG.offscreen, 0, 0, W, H);
   } else {
-    // 程序化兜底：大猫头 + 星星 + 毛线球
-    g.save(); g.globalAlpha = .5;
-    drawCatHead(g, W * .58, 318, 128, 0, t);
-    for (let i = 0; i < 12; i++) {
-      const a = i * 2.1 + t * .15;
-      drawStar(g, 110 + (i * 157) % 1080, 50 + (i * 83) % 600, 5 + i % 4, 2, 5, i % 2 ? C.gold : C.cream, null, 0, a);
+    const fallback = g.createLinearGradient(0, 0, 0, H);
+    fallback.addColorStop(0, '#2a1736');
+    fallback.addColorStop(.42, '#3d2347');
+    fallback.addColorStop(.72, '#2d1c3c');
+    fallback.addColorStop(1, '#14101f');
+    g.fillStyle = fallback; g.fillRect(0, 0, W, H);
+    if (V11_BG.ready && V11_BG.img) {
+      const img = V11_BG.img;
+      const cover = Math.max(W / img.width, H / img.height);
+      const dw = img.width * cover, dh = img.height * cover;
+      g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    } else {
+      // 程序化兜底：大猫头 + 星星 + 毛线球
+      g.save(); g.globalAlpha = .5;
+      drawCatHead(g, W * .58, 318, 128, 0, t);
+      for (let i = 0; i < 12; i++) {
+        const a = i * 2.1 + t * .15;
+        drawStar(g, 110 + (i * 157) % 1080, 50 + (i * 83) % 600, 5 + i % 4, 2, 5, i % 2 ? C.gold : C.cream, null, 0, a);
+      }
+      g.restore();
     }
-    g.restore();
   }
   // 暗角 + 上下渐变，保证标题与按钮可读。
   const vig = g.createRadialGradient(W * .5, H * .5, H * .28, W * .5, H * .5, W * .72);
@@ -11129,10 +11204,9 @@ openBestiary = function () {
 };
 
 function v11BestiaryCells() {
+  /* v1.1.3：固定三阶玩家形态已移除；角色底猫与流派形态改在
+     「角色 / 流派形态」分页展示，怪物页只保留敌人。 */
   const cells = [];
-  for (let f = 0; f < FORMS.length; f++) {
-    cells.push({ kind: 'player', form: f, name: FORMS[f].name, tag: FORMS[f].tier + '形态', chapter: '玩家进化阶' });
-  }
   for (const key of Object.keys(ENEMY_DEFS)) {
     const def = ENEMY_DEFS[key];
     cells.push({
@@ -11151,7 +11225,7 @@ function v11DrawBestiaryScreen(g, t) {
   const cells = v11BestiaryCells();
   const mobs = Object.keys(ENEMY_DEFS).filter(k => !ENEMY_DEFS[k].boss).length;
   const bosses = Object.keys(ENEMY_DEFS).filter(k => ENEMY_DEFS[k].boss).length;
-  drawText(g, `${FORMS.length} 阶玩家形态 · ${mobs} 种小怪 · ${bosses} 个章节 Boss · 全部程序化绘制`,
+  drawText(g, `${mobs} 种小怪 · ${bosses} 个章节 Boss · 全部程序化绘制 · 角色形态见顶栏分页`,
     54, 74, 11, withAlpha(C.cream, .65), { weight: 700 });
 
   const totalPages = Math.max(1, Math.ceil(cells.length / V11_BESTIARY_PAGE_SIZE));
@@ -11175,8 +11249,7 @@ function v11DrawBestiaryScreen(g, t) {
     const x = startX + col * (cardW + gapX);
     const y = startY + row * (cardH + gapY);
     const cell = slice[i];
-    const accent = cell.kind === 'player' ? FORMS[cell.form].trim
-      : (cell.def.boss ? C.coral : (THEMES[(cell.def.chapter || 1) - 1] || THEMES[0]).accent);
+    const accent = cell.def.boss ? C.coral : (THEMES[(cell.def.chapter || 1) - 1] || THEMES[0]).accent;
     g.save();
     fillRound(g, x + 4, y + 5, cardW, cardH, 14, withAlpha(C.ink, .35));
     fillRound(g, x, y, cardW, cardH, 14, withAlpha('#251733', .95));
@@ -11187,10 +11260,7 @@ function v11DrawBestiaryScreen(g, t) {
     g.save();
     const cx = x + cardW / 2, cy = y + 78;
     roundRectPath(g, x + 8, y + 28, cardW - 16, 92, 10); g.clip();
-    if (cell.kind === 'player') {
-      const fake = Object.assign({}, BESTIARY_PLAYER_DUMMY, { form: cell.form, x: cx, y: cy + 8, r: 28 });
-      drawPlayerSprite(g, fake, t, { alwaysVisible: true, blinkOffset: .8 + cell.form });
-    } else {
+    if (cell.kind === 'enemy') {
       const d = cell.def;
       const fake = {
         x: cx, y: cy + 8, r: 26, def: d, ai: d.ai, boss: !!d.boss, color: d.color,
@@ -14562,7 +14632,7 @@ buildRoomBackground = function (room) {
   const NYAN = window.__nyan;
 
   NYAN.version = v11Version();
-  NYAN.engine = 'v1.1.2-online';
+  NYAN.engine = 'v1.1.3-online';
   NYAN.debugReady = true;
 
   const cloneRect = r => (r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null);
@@ -15552,7 +15622,7 @@ Object.assign(gameoverRestartRect, { x: 256, y: 498, w: 236, h: 60 });
    ------------------------------------------------------------------
    - 全部菜单页统一浅米-奶黄-淡橙暖色主题，插画叠亮帘
    - 主页内容块整体下移（桌面 / 小横屏 / 竖屏三套坐标，绘制与热区同源）
-   - 战斗 HUD 设置药丸「⚙ 设置（T）」/ 手机「⚙ 设置」，先暂停再开设置
+   - 战斗 HUD 设置药丸「⚙ 设置」/ 手机 DOM「⚙ 设置」，战斗中进设置关闭直回战斗
    - 触屏追加 DOM 命中层，保证一次点中
    本层不碰战斗数值，v1.1.1 全部能力保留。
    ================================================================== */
@@ -15670,12 +15740,35 @@ function v11gBrightCall(fn) {
 }
 
 /* ---------------- 暖色底 ---------------- */
+/* v1.1.3：渐变按 (ctx, W, H) 缓存复用，星星 16→8，避免每帧 createLinearGradient。 */
+const V11G_BG_GRAD = { ctx: null, key: '', base: null, top: null, bottom: null, vig: null };
+function v11gBgGradients(g) {
+  const key = W + 'x' + H;
+  if (V11G_BG_GRAD.ctx !== g || V11G_BG_GRAD.key !== key) {
+    const base = g.createLinearGradient(0, 0, 0, H);
+    base.addColorStop(0, V11_THEME.bgTop);
+    base.addColorStop(.55, V11_THEME.bgMid);
+    base.addColorStop(1, V11_THEME.bgBottom);
+    // 主页上下亮帘（旧暗色叠层坐标），同样只建一次。
+    const top = g.createLinearGradient(0, 0, 0, 260);
+    top.addColorStop(0, 'rgba(255,250,240,.86)');
+    top.addColorStop(.55, 'rgba(255,247,232,.30)');
+    top.addColorStop(1, 'rgba(255,247,232,0)');
+    const bottom = g.createLinearGradient(0, H - 300, 0, H);
+    bottom.addColorStop(0, 'rgba(255,233,205,0)');
+    bottom.addColorStop(1, 'rgba(255,221,194,.82)');
+    V11G_BG_GRAD.ctx = g;
+    V11G_BG_GRAD.key = key;
+    V11G_BG_GRAD.base = base;
+    V11G_BG_GRAD.top = top;
+    V11G_BG_GRAD.bottom = bottom;
+  }
+  return V11G_BG_GRAD;
+}
+
 function v11ThemeBg(g, t, opts = {}) {
-  const lg = g.createLinearGradient(0, 0, 0, H);
-  lg.addColorStop(0, V11_THEME.bgTop);
-  lg.addColorStop(.55, V11_THEME.bgMid);
-  lg.addColorStop(1, V11_THEME.bgBottom);
-  g.fillStyle = lg; g.fillRect(0, 0, W, H);
+  g.fillStyle = v11gBgGradients(g).base;
+  g.fillRect(0, 0, W, H);
 
   g.save();
   g.globalAlpha = .22;
@@ -15687,7 +15780,8 @@ function v11ThemeBg(g, t, opts = {}) {
 
   g.save();
   g.globalAlpha = .26;
-  for (let i = 0; i < 16; i++) {
+  // v1.1.3：星星 16→8，降低每帧星形路径开销。
+  for (let i = 0; i < 8; i++) {
     const a = i * 2.1 + (t || 0) * .12;
     drawStar(g, 60 + ((i * 173) % 1160), 34 + ((i * 89) % 640), 3 + i % 3, 1.2, 5,
       i % 3 ? C.gold : C.coral, null, 0, a);
@@ -15699,33 +15793,32 @@ function v11ThemeBg(g, t, opts = {}) {
 const V11G_LEGACY_HOME_BACKDROP = v11DrawHomeBackdrop;
 v11DrawHomeBackdrop = function (g, t) {
   v11EnsureBackground();
-  v11ThemeBg(g, t, { variant: 'home' });
-  if (V11_BG.ready && V11_BG.img) {
-    const img = V11_BG.img;
-    const cover = Math.max(W / img.width, H / img.height);
-    const dw = img.width * cover, dh = img.height * cover;
-    g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
-    // 亮帘：压住插画暗部，保留热闹感
-    g.fillStyle = V11_THEME.veil; g.fillRect(0, 0, W, H);
+  if (V11_BG.ready && V11_BG.offscreen) {
+    // v1.1.3：ready 后每帧只 drawImage 1280×720 离屏单例，不再缩放原图 + 逐帧建渐变。
+    g.drawImage(V11_BG.offscreen, 0, 0, W, H);
   } else {
-    g.save(); g.globalAlpha = .16;
-    drawCatHead(g, W * .62, 372, 132, 0, t);
-    for (let i = 0; i < 10; i++) {
-      const a = i * 2.1 + t * .15;
-      drawStar(g, 120 + (i * 157) % 1040, 60 + (i * 83) % 560, 4 + i % 3, 1.8, 5, i % 2 ? C.gold : C.coral, null, 0, a);
+    v11ThemeBg(g, t, { variant: 'home' });
+    if (V11_BG.ready && V11_BG.img) {
+      const img = V11_BG.img;
+      const cover = Math.max(W / img.width, H / img.height);
+      const dw = img.width * cover, dh = img.height * cover;
+      g.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      // 亮帘：压住插画暗部，保留热闹感
+      g.fillStyle = V11_THEME.veil; g.fillRect(0, 0, W, H);
+    } else {
+      g.save(); g.globalAlpha = .16;
+      drawCatHead(g, W * .62, 372, 132, 0, t);
+      for (let i = 0; i < 10; i++) {
+        const a = i * 2.1 + t * .15;
+        drawStar(g, 120 + (i * 157) % 1040, 60 + (i * 83) % 560, 4 + i % 3, 1.8, 5, i % 2 ? C.gold : C.coral, null, 0, a);
+      }
+      g.restore();
     }
-    g.restore();
   }
-  // 上亮下暖，替代旧暗角；标题区始终通透
-  const top = g.createLinearGradient(0, 0, 0, 260);
-  top.addColorStop(0, 'rgba(255,250,240,.86)');
-  top.addColorStop(.55, 'rgba(255,247,232,.30)');
-  top.addColorStop(1, 'rgba(255,247,232,0)');
-  g.fillStyle = top; g.fillRect(0, 0, W, 260);
-  const bottom = g.createLinearGradient(0, H - 300, 0, H);
-  bottom.addColorStop(0, 'rgba(255,233,205,0)');
-  bottom.addColorStop(1, 'rgba(255,221,194,.82)');
-  g.fillStyle = bottom; g.fillRect(0, H - 300, W, 300);
+  // 上亮下暖，替代旧暗角；标题区始终通透（渐变按 ctx/W/H 缓存）。
+  const grad = v11gBgGradients(g);
+  g.fillStyle = grad.top; g.fillRect(0, 0, W, 260);
+  g.fillStyle = grad.bottom; g.fillRect(0, H - 300, W, 300);
 };
 
 /* ---------------- 主页视觉组件 ---------------- */
@@ -15773,9 +15866,10 @@ function v11gHomeLayout() {
       card: null,
       cur: { x: 40, y: 620, w: 1200, h: 40 },
       links: [
-        { id: 'bestiary', label: '模型图鉴', x: 40, y: 672, w: 386, h: 44 },
-        { id: 'changelog', label: '更新日志', x: 448, y: 672, w: 386, h: 44 },
-        { id: 'exit', label: '退出', x: 856, y: 672, w: 386, h: 44 },
+        { id: 'bestiary', label: '模型图鉴', x: 40, y: 672, w: 288, h: 44 },
+        { id: 'changelog', label: '更新日志', x: 344, y: 672, w: 288, h: 44 },
+        { id: 'charshop', label: '🐱 角色选择', x: 648, y: 672, w: 288, h: 44 },
+        { id: 'exit', label: '退出', x: 952, y: 672, w: 288, h: 44 },
       ],
       version: null,
     };
@@ -15951,7 +16045,7 @@ const V11_MODE_SETTINGS_RECT = { x: 846, y: 32, w: 148, h: 54 };
 let V11G_SETTINGS_BACK = null;
 
 function v11gSettingsPillLabel(compact) {
-  return (IS_TOUCH_DEVICE || V11_PROFILE_MOBILE_HINT) ? '⚙ 设置' : '⚙ 设置（T）';
+  return '⚙ 设置';
 }
 let V11_PROFILE_MOBILE_HINT = false;
 try {
@@ -15964,7 +16058,7 @@ function v11gDrawSettingsPill(g, rect, label, hover, key) {
   const pressed = V11G_PRESS_ID === key && (time - V11G_PRESS_AT) < .18;
   fillRound(g, rect.x + 4, rect.y + 5, rect.w, rect.h, 13, V11_THEME.shadow);
   fillRound(g, rect.x, rect.y + (pressed ? 2 : 0), rect.w, rect.h, 13,
-    pressed ? withAlpha(C.gold, .72) : (hov ? withAlpha(C.gold, .42) : V11_THEME.panel));
+    pressed ? withAlpha(C.gold, .62) : (hov ? withAlpha(C.gold, .24) : V11_THEME.panel));
   strokeRound(g, rect.x, rect.y + (pressed ? 2 : 0), rect.w, rect.h, 13, V11_THEME.line, 3);
   if (label !== null) {
     drawText(g, label, rect.x + rect.w / 2, rect.y + rect.h / 2 - 1 + (pressed ? 2 : 0),
@@ -15977,6 +16071,10 @@ const V11G_LEGACY_DRAW_HUD = drawHUD;
 drawHUD = function (g, t) {
   V11G_LEGACY_DRAW_HUD(g, t);
   if (!run || !player) return;
+  // 触屏/手机走 DOM #nyan-gear（96×48，贴安全区）；canvas 不再重复画药丸。
+  const touchOrMobile = (typeof V11_PROFILE !== 'undefined' && V11_PROFILE && V11_PROFILE.mobile) ||
+    (typeof IS_TOUCH_DEVICE !== 'undefined' && IS_TOUCH_DEVICE);
+  if (touchOrMobile) return;
   v11gDrawSettingsPill(g, V11_GEAR_PILL, v11gSettingsPillLabel(), null, 'hud');
 };
 
@@ -15988,14 +16086,9 @@ if (typeof V11_HUD_GEAR === 'object' && V11_HUD_GEAR) {
   V11_HUD_GEAR.h = V11_GEAR_PILL.h;
 }
 
-/* 先暂停再进设置；关闭后回暂停菜单。 */
+/* 战斗中直接进设置；关闭后由 settingsReturn='playing' 直接回战斗。暂停→设置仍回暂停。 */
 const V11G_LEGACY_OPEN_SETTINGS = openSettings;
 openSettings = function (from) {
-  if (from === 'playing') {
-    if (state === 'playing' || state === 'transition') state = 'paused';
-    V11G_LEGACY_OPEN_SETTINGS('paused');
-    return;
-  }
   V11G_LEGACY_OPEN_SETTINGS(from);
 };
 const V11G_LEGACY_CLOSE_SETTINGS = closeSettings;
@@ -16144,6 +16237,15 @@ try {
       gearLabel: function () { return v11gSettingsPillLabel(); },
       modeSettingsRect: function () { return { ...V11_MODE_SETTINGS_RECT }; },
       openSettingsFrom: function (from) { openSettings(from || 'title'); return state; },
+      closeSettingsNow: function () { closeSettings(); return state; },
+      settingsReturn: function () { return settingsReturn; },
+      bgState: function () {
+        return {
+          source: V11_BG.source, ready: V11_BG.ready, failed: V11_BG.failed,
+          img: V11_BG.img ? { w: V11_BG.img.naturalWidth, h: V11_BG.img.naturalHeight } : null,
+          offscreen: V11_BG.offscreen ? { w: V11_BG.offscreen.width, h: V11_BG.offscreen.height } : null,
+        };
+      },
       brightActive: function () { return V11G_BRIGHT; },
       domGear: function () {
         if (!v11gDomGear) return null;
@@ -16156,7 +16258,7 @@ try {
 
 /* ==== _v11h.js ==== */
 /* ==================================================================
-   v1.1.2 LAYER · H：角色系统（10 内置猫 + 照片主角 + 图鉴同步）
+   v1.1.3 LAYER · H：角色系统（10 内置猫 + 照片主角 + 流派驱动形态）
    ------------------------------------------------------------------
    - V11_CATS：10 条预设，字段 body/belly/trim/accent/eye/ear/face/weapon/shape
    - 选择键 weimiaoxunmiao_char_v1 / 照片键 weimiaoxunmiao_photo_v1
@@ -16200,17 +16302,16 @@ const V11_CATS = [
     body: '#eef2ff', belly: '#ffffff', trim: '#b9c6e8', accent: '#c4abff', eye: '#8a7dff',
     ear: 'round', face: 'cold', weapon: 'snow', shape: 'fluffy' },
 ];
-const V11H_BASE_FORM_NAMES = FORMS.slice(0, 3).map(f => f.name);
 
 function v11CatById(id) {
   for (const c of V11_CATS) if (c.id === id) return c;
   return V11_CATS[0];
 }
 
+/* v1.1.3：固定三阶进化链已移除。底猫名不再拼接“·觉醒 / ·真神”，
+   战斗内形态完全由共鸣流派（v11hActiveSchoolForm）驱动。 */
 function v11hStageName(cat, stage) {
-  if (stage <= 0) return cat.name;
-  if (cat.id === 'cream') return V11H_BASE_FORM_NAMES[stage] || cat.name;
-  return cat.name + (stage === 1 ? '·觉醒' : '·真神');
+  return cat.name;
 }
 
 /* ---------------- 2. 选择 / 照片持久化 ---------------- */
@@ -16268,7 +16369,7 @@ function v11hDataUrlBytes(dataUrl) {
 
 function v11hSyncFormNames() {
   if (V11_CHAR.kind === 'photo') {
-    for (let i = 0; i < 3 && i < FORMS.length; i++) FORMS[i].name = i === 0 ? '照片猫猫' : ('照片猫猫' + (i === 1 ? '·觉醒' : '·真神'));
+    for (let i = 0; i < 3 && i < FORMS.length; i++) FORMS[i].name = '照片猫猫';
     return;
   }
   const cat = v11hCurrentCat();
@@ -16616,12 +16717,12 @@ function v11hDrawFace(g, r, cat, t, o) {
   }
 }
 
-/* 一整只猫：r 为基准半径；o.headOnly 只画头（HUD / 卡片）。 */
-function v11hDrawCatFigure(g, r, cat, stage, t, o) {
+/* 底猫：只画脸型 / 底色 / 体型 / 尾巴 / 爪子。
+   v1.1.3 起不再携带固定的“觉醒 / 真神”装饰；战斗内形态由流派驱动。 */
+function v11hDrawCatBase(g, r, cat, t, o) {
   o = o || {};
   const ink = C.ink;
   const lw = Math.max(1.1, r * .12);
-  const s = clamp(stage || 0, 0, 2);
   const dims = v11hShapeDims(cat.shape);
   const headOnly = !!o.headOnly;
   const body = cat.body, belly = cat.belly, trim = cat.trim, accent = cat.accent;
@@ -16642,22 +16743,6 @@ function v11hDrawCatFigure(g, r, cat, stage, t, o) {
     g.stroke();
     g.restore();
 
-    // 二阶披风
-    if (s >= 2) {
-      g.save();
-      g.globalAlpha = .85;
-      for (const sx of [-1, 1]) {
-        g.beginPath();
-        g.moveTo(sx * r * .42, -r * .16);
-        g.quadraticCurveTo(sx * r * 1.35, r * .12, sx * r * 1.15, r * .82);
-        g.lineTo(sx * r * .18, r * .58);
-        g.closePath();
-        g.fillStyle = withAlpha(accent, .38); g.fill();
-        g.strokeStyle = withAlpha(ink, .55); g.lineWidth = lw * .7; g.stroke();
-      }
-      g.restore();
-    }
-
     // 后腿
     for (const sx of [-1, 1]) {
       ellipse(g, sx * r * .42, r * .8, r * .26, r * .18, body, ink, lw * .9);
@@ -16674,28 +16759,6 @@ function v11hDrawCatFigure(g, r, cat, stage, t, o) {
         g.lineTo(i * r * .26, r * dims.by - r * dims.bh * 1.02);
         g.stroke();
       }
-    }
-
-    // 一阶战带 / 二阶肩甲
-    if (s >= 1) {
-      g.strokeStyle = ink; g.lineWidth = Math.max(1.6, r * .16);
-      g.beginPath();
-      g.moveTo(-r * dims.bw * .92, r * .02);
-      g.quadraticCurveTo(0, r * .2, r * dims.bw * .92, r * .02);
-      g.stroke();
-      g.strokeStyle = trim; g.lineWidth = Math.max(1.2, r * .09);
-      g.beginPath();
-      g.moveTo(-r * dims.bw * .92, r * .02);
-      g.quadraticCurveTo(0, r * .2, r * dims.bw * .92, r * .02);
-      g.stroke();
-      for (let i = -1; i <= 1; i++) circle(g, i * r * .3, r * .1 + Math.abs(i) * r * .03, r * .035, C.cream, null, 0);
-    }
-    if (s >= 2) {
-      for (const sx of [-1, 1]) {
-        ellipse(g, sx * r * dims.bw * .96, r * .1, r * .26, r * .16, trim, ink, lw * .8, sx * .24);
-      }
-      g.strokeStyle = withAlpha(ink, .35); g.lineWidth = lw * .6;
-      g.beginPath(); g.arc(0, r * .3, r * .34, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
     }
   }
 
@@ -16719,42 +16782,7 @@ function v11hDrawCatFigure(g, r, cat, stage, t, o) {
     }
   }
 
-  if (s >= 1) {
-    // 头巾 / 战纹
-    g.strokeStyle = ink; g.lineWidth = lw * .85;
-    g.beginPath();
-    g.moveTo(-r * .58, -r * .3);
-    g.quadraticCurveTo(0, -r * .14, r * .58, -r * .3);
-    g.stroke();
-    g.strokeStyle = trim; g.lineWidth = lw * .5;
-    g.beginPath();
-    g.moveTo(-r * .58, -r * .3);
-    g.quadraticCurveTo(0, -r * .14, r * .58, -r * .3);
-    g.stroke();
-  }
-
   v11hDrawFace(g, r, cat, t, { aim: o.aim, blink: o.blink, dead: o.dead });
-
-  if (s >= 2) {
-    // 第三只眼
-    circle(g, 0, -r * dims.hh * .62, r * .07, accent, ink, lw * .6);
-    // 光环
-    ellipse(g, 0, -r * dims.hh * .95 - r * .1, r * .46, r * .1, withAlpha(C.gold, .28), C.gold, lw * .55);
-    // 皇冠
-    const cy = -r * dims.hh * .92;
-    g.beginPath();
-    g.moveTo(-r * .4, cy);
-    g.lineTo(-r * .4, cy - r * .26);
-    g.lineTo(-r * .17, cy - r * .1);
-    g.lineTo(0, cy - r * .32);
-    g.lineTo(r * .17, cy - r * .1);
-    g.lineTo(r * .4, cy - r * .26);
-    g.lineTo(r * .4, cy + r * .02);
-    g.closePath();
-    g.fillStyle = C.gold; g.fill();
-    g.strokeStyle = ink; g.lineWidth = lw * .7; g.stroke();
-    circle(g, 0, cy - r * .1, r * .05, C.coral, ink, lw * .5);
-  }
   g.restore();
 
   if (!headOnly) {
@@ -16775,8 +16803,38 @@ function v11hDrawCatFigure(g, r, cat, stage, t, o) {
       }
       g.restore();
     }
-    v11hDrawWeapon(g, r, cat, s, t, o);
+    if (!o.hideWeapon) v11hDrawWeapon(g, r, cat, 0, t, o);
   }
+}
+
+/* form = {schoolId, tier} | null：null 只画底猫；否则交给 _v11i 的 10 套流派形态。
+   所有调用处（玩家 / HUD / 角色页 / 图鉴）都从这里分发。 */
+function v11hDrawCatFigure(g, r, cat, form, t, o) {
+  o = o || {};
+  if (form && form.schoolId) v11hDrawSchoolForm(g, r, cat, form, t, o);
+  else v11hDrawCatBase(g, r, cat, t, o);
+}
+
+function v11hDrawSchoolForm(g, r, cat, form, t, o) {
+  let def = null;
+  try { def = V11_SCHOOL_FORMS[form.schoolId]; } catch (e) { def = null; }
+  const fn = def ? (form.tier >= 2 ? def.t2 : def.t1) : null;
+  if (typeof fn === 'function') fn(g, r, cat, t, o || {});
+  else v11hDrawCatBase(g, r, cat, t, o || {});
+}
+
+/* 当前战斗共鸣形态；与 v11hActiveSchoolColor（i 层覆盖）同源，都取 v11iTopSchool()。 */
+function v11hActiveSchoolForm() {
+  try {
+    const top = typeof v11iTopSchool === 'function' ? v11iTopSchool() : null;
+    if (!top || !top.st || !top.st.tier) return null;
+    return {
+      schoolId: top.def.id,
+      tier: top.st.tier >= 2 ? 2 : 1,
+      name: top.st.tier >= 2 ? top.def.secondName : top.def.name,
+      color: top.def.color,
+    };
+  } catch (e) { return null; }
 }
 
 function v11hDrawWeapon(g, r, cat, stage, t, o) {
@@ -16834,11 +16892,11 @@ function v11hDrawWeapon(g, r, cat, stage, t, o) {
   }
 }
 
-/* 只画头（HUD / 卡片 / 小图标） */
-function v11hDrawCatHeadGeneric(g, x, y, size, cat, stage, t) {
+/* 只画头（HUD / 卡片 / 小图标）：form = {schoolId,tier}|null */
+function v11hDrawCatHeadGeneric(g, x, y, size, cat, form, t) {
   g.save();
   g.translate(x, y);
-  v11hDrawCatFigure(g, size * .92, cat, stage, t, { headOnly: true });
+  v11hDrawCatFigure(g, size * .92, cat, form, t, { headOnly: true });
   g.restore();
 }
 
@@ -16875,32 +16933,14 @@ function v11hDrawPhotoCircle(g, x, y, r, t) {
   circle(g, x, y, r - bezel * 1.9, null, withAlpha(ink, .5), Math.max(1, r * .045));
 }
 
-/* 照片主角：stage0 耳+胡须+圆眼；stage1 流派光环+速度线；stage2 战甲+图腾 */
+/* 照片主角：照片圆 + 猫耳 + 胡须 + 圆眼，不再携带固定三阶装饰。
+   v1.1.3：form = {schoolId,tier}|null；非空时以 50% 透明度叠加
+   对应流派主题层（只取外围剪影/光效，不覆盖脸）。 */
 function v11DrawPhotoCat(g, x, y, size, form, t, schoolColor) {
   const r = Math.max(8, size);
-  const stage = clamp(form || 0, 0, 2);
-  const school = schoolColor || v11hActiveSchoolColor();
   const ink = C.ink;
   const lw = Math.max(1.2, r * .1);
-  const halo = school || C.gold;
-
-  if (stage >= 1) {
-    g.save();
-    g.globalAlpha = .5 + Math.sin(t * 3) * .12;
-    g.strokeStyle = withAlpha(halo, .92); g.lineWidth = Math.max(1.5, r * .1);
-    g.beginPath(); g.arc(x, y, r * 1.14, 0, TAU); g.stroke();
-    g.strokeStyle = withAlpha(halo, .55); g.lineWidth = Math.max(1.1, r * .07);
-    for (let i = 0; i < 4; i++) {
-      const a = i * Math.PI / 2 + .38;
-      const cx = x + Math.cos(a) * r * 1.26;
-      const cy = y + Math.sin(a) * r * 1.26;
-      g.beginPath();
-      g.moveTo(cx - Math.cos(a) * r * .28, cy - Math.sin(a) * r * .28);
-      g.lineTo(cx, cy);
-      g.stroke();
-    }
-    g.restore();
-  }
+  const school = schoolColor || (form && form.color) || v11hActiveSchoolColor();
 
   v11hDrawPhotoCircle(g, x, y, r, t);
 
@@ -16918,7 +16958,7 @@ function v11DrawPhotoCat(g, x, y, size, form, t, schoolColor) {
     g.lineTo(x + sx * r * .7, y - r * .98);
     g.lineTo(x + sx * r * .84, y - r * .66);
     g.closePath();
-    g.fillStyle = withAlpha(stage >= 2 && school ? school : C.coral, .55); g.fill();
+    g.fillStyle = withAlpha(form && form.tier >= 2 && school ? school : C.coral, .55); g.fill();
   }
 
   // 胡须
@@ -16951,42 +16991,20 @@ function v11DrawPhotoCat(g, x, y, size, form, t, schoolColor) {
   g.quadraticCurveTo(x, y + r * .3, x + r * .1, y + r * .2);
   g.stroke();
 
-  if (stage >= 2) {
+  if (form && form.schoolId && typeof v11hDrawSchoolForm === 'function') {
+    const baseCat = V11_CHAR.kind === 'photo' ? v11CatById(V11H_LAST_PRESET) : v11hCurrentCat();
     g.save();
-    // 底部战甲
-    g.strokeStyle = withAlpha(ink, .85); g.lineWidth = Math.max(2.2, r * .18);
-    g.beginPath(); g.arc(x, y, r * .93, Math.PI * .22, Math.PI * .78); g.stroke();
-    g.strokeStyle = school || C.gold; g.lineWidth = Math.max(1.6, r * .11);
-    g.beginPath(); g.arc(x, y, r * .93, Math.PI * .24, Math.PI * .76); g.stroke();
-    for (let i = 0; i < 3; i++) {
-      const a = Math.PI * .34 + i * Math.PI * .16;
-      circle(g, x + Math.cos(a) * r * .93, y + Math.sin(a) * r * .93, r * .04, C.cream, null, 0);
-    }
-    // 胸口图腾
-    drawStar(g, x, y + r * .58, r * .16, r * .07, 5, school || C.gold, ink, lw * .7, t * .6);
-    // 小皇冠
-    const cy = y - r * 1.2;
-    g.beginPath();
-    g.moveTo(x - r * .34, cy);
-    g.lineTo(x - r * .34, cy - r * .22);
-    g.lineTo(x - r * .14, cy - r * .08);
-    g.lineTo(x, cy - r * .3);
-    g.lineTo(x + r * .14, cy - r * .08);
-    g.lineTo(x + r * .34, cy - r * .22);
-    g.lineTo(x + r * .34, cy + r * .02);
-    g.closePath();
-    g.fillStyle = school || C.gold; g.fill();
-    g.strokeStyle = ink; g.lineWidth = lw * .6; g.stroke();
+    g.globalAlpha = .5;
+    g.translate(x, y);
+    v11hDrawSchoolForm(g, r * 1.02, baseCat, form, t, { overlayOnly: true, fxScale: .88 });
     g.restore();
   }
 }
 
-/* ---------------- 6. 覆盖 drawPlayerSprite / drawCatHead ---------------- */
-const V11H_LEGACY_PLAYER_SPRITE = drawPlayerSprite;
+/* v1.1.3：奶油团子不再走旧三阶精灵；所有底猫统一由流派形态驱动。 */
 drawPlayerSprite = function (g, p, t, opts = {}) {
   const cat = v11hCurrentCat();
   const isPhoto = V11_CHAR.kind === 'photo';
-  if (!isPhoto && cat.id === 'cream') return V11H_LEGACY_PLAYER_SPRITE(g, p, t, opts);
   return v11hDrawCustomPlayer(g, p, t, opts, isPhoto, cat);
 };
 
@@ -16998,6 +17016,7 @@ function v11hDrawCustomPlayer(g, p, t, opts, isPhoto, cat) {
   const squish = isDead ? .22 : (moving ? 1 + Math.sin(t * 12 + (opts.phase || 0)) * .035 : 1);
   const blink = !isDead && ((t * 1.55 + (opts.blinkOffset || 0)) % 4.3 > 4.1);
   const low = p.hp !== undefined && p.hp > 0 && p.hp / p.maxHp < .3;
+  const form = v11hActiveSchoolForm();
 
   g.save();
   g.globalAlpha = .28;
@@ -17010,15 +17029,15 @@ function v11hDrawCustomPlayer(g, p, t, opts, isPhoto, cat) {
     g.strokeStyle = withAlpha(C.cream, .75); g.lineWidth = 3;
     g.beginPath(); g.arc(p.x, p.y + r * 1.02, r * 1.32, Math.PI * .12, Math.PI * .12 + Math.PI * .76 * charge); g.stroke();
   }
-  if ((p.form || 0) === 1 && !isDead) {
-    g.globalAlpha = .16 + Math.sin(t * 6) * .06;
-    g.fillStyle = C.coral;
+  if (form && !isDead) {
+    g.globalAlpha = form.tier >= 2 ? .26 : .16 + Math.sin(t * 6) * .06;
+    g.fillStyle = withAlpha(form.color, .9);
     g.beginPath(); g.ellipse(p.x, p.y + r * 1.02, r * 1.6, r * .5, 0, 0, TAU); g.fill();
-  }
-  if ((p.form || 0) === 2 && !isDead) {
-    g.globalAlpha = .28;
-    g.strokeStyle = withAlpha(C.gold, .75); g.lineWidth = 2;
-    g.beginPath(); g.ellipse(p.x, p.y + r * 1.05, r * 1.45, r * .42, 0, 0, TAU); g.stroke();
+    if (form.tier >= 2) {
+      g.globalAlpha = .3;
+      g.strokeStyle = withAlpha(form.color, .8); g.lineWidth = 2.4;
+      g.beginPath(); g.ellipse(p.x, p.y + r * 1.05, r * 1.5, r * .45, 0, 0, TAU); g.stroke();
+    }
   }
   g.restore();
 
@@ -17036,9 +17055,9 @@ function v11hDrawCustomPlayer(g, p, t, opts, isPhoto, cat) {
   g.scale(1, squish);
 
   if (isPhoto) {
-    v11DrawPhotoCat(g, 0, -r * .18, r * 1.02, p.form || 0, t, v11hActiveSchoolColor());
+    v11DrawPhotoCat(g, 0, -r * .18, r * 1.02, form, t, form ? form.color : null);
   } else {
-    v11hDrawCatFigure(g, r * 1.02, cat, p.form || 0, t, {
+    v11hDrawCatFigure(g, r * 1.02, cat, form, t, {
       aim: p.aim, moving, blink, dead: isDead,
       attackAnim: p.attackAnim, attackAnimMax: p.attackAnimMax,
     });
@@ -17063,18 +17082,15 @@ function v11hDrawCustomPlayer(g, p, t, opts, isPhoto, cat) {
   g.restore();
 }
 
-const V11H_LEGACY_CAT_HEAD = drawCatHead;
+/* 头部图标：formIndex 保留只为兼容旧调用，实际形态由 v11hActiveSchoolForm() 决定。 */
 drawCatHead = function (g, x, y, size, formIndex, t = 0) {
+  const form = v11hActiveSchoolForm();
   if (V11_CHAR.kind === 'photo') {
-    v11DrawPhotoCat(g, x, y, Math.max(6, size * .98), 0, t, v11hActiveSchoolColor());
+    v11DrawPhotoCat(g, x, y, Math.max(6, size * .98), form, t, form ? form.color : null);
     return;
   }
   const cat = v11hCurrentCat();
-  if (cat.id === 'cream') {
-    V11H_LEGACY_CAT_HEAD(g, x, y, size, formIndex, t);
-    return;
-  }
-  v11hDrawCatHeadGeneric(g, x, y, size, cat, formIndex || 0, t);
+  v11hDrawCatHeadGeneric(g, x, y, size, cat, form, t);
 };
 
 /* ---------------- 7. 角色选择页 charshop ---------------- */
@@ -17082,19 +17098,51 @@ const V11H_SHOP_RECTS = [];
 let V11H_CHARSHOP_BACK = 'title';
 let V11H_IMPORTING = false;
 
+/* v1.1.3：角色选择页 = 10 只底猫 + 流派画廊；预览框实时叠加所选流派 T1。 */
+let V11H_SHOP_PREVIEW = null;
+function v11hShopPreviewCat() {
+  if (V11_CHAR.kind === 'preset') return v11hCurrentCat();
+  return v11CatById(V11H_LAST_PRESET || 'cream');
+}
+function v11hShopPreview() {
+  let id = V11H_SHOP_PREVIEW;
+  if (!V11_SCHOOLS.some(d => d.id === id)) {
+    const active = v11hActiveSchoolForm();
+    id = active ? active.schoolId : V11_SCHOOLS[0].id;
+  }
+  const def = V11_SCHOOLS.find(d => d.id === id) || V11_SCHOOLS[0];
+  return { schoolId: def.id, tier: 1, name: def.name, color: def.color, def };
+}
+function v11hDrawFigureAt(g, x, y, radius, cat, form, t, o) {
+  g.save();
+  g.translate(x, y);
+  v11hDrawCatFigure(g, radius, cat, form, t, o || {});
+  g.restore();
+}
+
 function v11hShopLayout() {
   const compact = v11CompactLayout();
   const portrait = compact && window.innerHeight > window.innerWidth;
   const cols = portrait ? 2 : 5;
-  const cardW = portrait ? 594 : 228;
-  const cardH = portrait ? 85 : 200;
+  const cardW = portrait ? 564 : 228;
+  const cardH = portrait ? 64 : 148;
   const gapX = portrait ? 12 : 14;
-  const gapY = portrait ? 8 : 16;
+  const gapY = portrait ? 8 : 12;
   const startX = portrait ? 40 : 42;
-  const startY = 96;
+  const startY = portrait ? 92 : 106;
   const rows = Math.ceil(V11_CATS.length / cols);
-  const photoY = startY + rows * cardH + (rows - 1) * gapY + (portrait ? 14 : 18);
-  return { portrait, compact, cols, rows, cardW, cardH, gapX, gapY, startX, startY, photoY, photoH: portrait ? 52 : 56 };
+  const cardsEnd = startY + rows * cardH + (rows - 1) * gapY;
+  const galleryY = cardsEnd + (portrait ? 12 : 16);
+  const galleryH = portrait ? 72 : 100;
+  const galleryX = 40;
+  const galleryW = 232;
+  const galleryGap = 8;
+  const photoY = galleryY + galleryH + 14;
+  return {
+    portrait, compact, cols, rows, cardW, cardH, gapX, gapY, startX, startY,
+    cardsEnd, galleryX, galleryY, galleryW, galleryH, galleryGap,
+    photoY, photoH: portrait ? 48 : 56,
+  };
 }
 
 function v11hDrawCharCard(g, r, cat, lay, selected) {
@@ -17105,30 +17153,22 @@ function v11hDrawCharCard(g, r, cat, lay, selected) {
   fillRound(g, r.x, r.y, r.w, 5, 2.5, cat.accent);
 
   if (lay.portrait) {
-    const xs = [r.x + 54, r.x + 104, r.x + 158];
-    const sizes = [15, 18, 21];
-    for (let i = 0; i < 3; i++) {
-      v11hDrawCatHeadGeneric(g, xs[i], r.y + r.h / 2 + 4, sizes[i], cat, i, time);
-    }
-    drawText(g, cat.name, r.x + 196, r.y + 30, 18, V11_THEME.ink, { weight: 900 });
-    drawText(g, `${cat.tier} · Lv1 / 5 / 10 三阶必换造型`, r.x + 196, r.y + 55, 10, V11_THEME.inkSoft, { weight: 700 });
+    v11hDrawFigureAt(g, r.x + 44, r.y + r.h / 2 + 2, 17, cat, null, time, {});
+    drawText(g, cat.name, r.x + 82, r.y + 26, 16, V11_THEME.ink, { weight: 900 });
+    drawText(g, `${cat.tier} · 底猫 · 进局后按共鸣流派变形态`, r.x + 82, r.y + 46, 10, V11_THEME.inkSoft, { weight: 700 });
   } else {
     drawText(g, cat.tier, r.x + 12, r.y + 18, 10, withAlpha(C.ink, .6), { weight: 800 });
-    const xs = [r.x + 62, r.x + 114, r.x + 166];
-    const sizes = [16, 19, 22];
-    for (let i = 0; i < 3; i++) {
-      v11hDrawCatHeadGeneric(g, xs[i], r.y + 92, sizes[i], cat, i, time);
-    }
-    drawText(g, cat.name, r.x + r.w / 2, r.y + 148, 17, V11_THEME.ink, { align: 'center', weight: 900 });
-    drawText(g, 'Lv1 / 5 / 10 · 进化必换造型', r.x + r.w / 2, r.y + 172, 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
+    v11hDrawFigureAt(g, r.x + r.w / 2, r.y + 78, 24, cat, null, time, {});
+    drawText(g, cat.name, r.x + r.w / 2, r.y + 124, 16, V11_THEME.ink, { align: 'center', weight: 900 });
+    drawText(g, '底猫 · 流派形态进局后决定', r.x + r.w / 2, r.y + 141, 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
   }
 
   if (selected) {
     // 右上内侧，留 12px 边距，绝不越出卡片
-    const bx = r.x + r.w - 88;
-    const by = lay.portrait ? r.y + 14 : r.y + 10;
-    fillRound(g, bx, by, 76, 24, 8, C.gold);
-    drawText(g, '✓ 当前', bx + 38, by + 12, 11, V11_THEME.ink, { align: 'center', weight: 900 });
+    const bx = r.x + r.w - 80;
+    const by = lay.portrait ? r.y + 20 : r.y + 8;
+    fillRound(g, bx, by, 68, 22, 8, C.gold);
+    drawText(g, '✓ 当前', bx + 34, by + 11, 10, V11_THEME.ink, { align: 'center', weight: 900 });
   }
 }
 
@@ -17136,7 +17176,7 @@ function v11hDrawCharShop(g, t) {
   V11H_SHOP_RECTS.length = 0;
   v11ThemeBg(g, t, { variant: 'charshop' });
   drawText(g, '角色选择', 52, 42, 30, V11_THEME.ink, { weight: 900 });
-  drawText(g, '10 只内置猫 · 每只 3 段进化必换造型 · 选中的猫立刻上场', 54, 74, 11, V11_THEME.inkSoft, { weight: 700 });
+  drawText(g, '10 只底猫自由选 · 进局后共鸣哪个流派就变哪个流派形态 · 选中的底猫立刻上场', 54, 74, 11, V11_THEME.inkSoft, { weight: 700 });
 
   const back = { x: 1040, y: 32, w: 184, h: 54 };
   const bh = pointRect(mouse, back);
@@ -17145,6 +17185,18 @@ function v11hDrawCharShop(g, t) {
   strokeRound(g, back.x, back.y, back.w, back.h, 13, V11_THEME.line, 2.6);
   drawText(g, '← 返回', back.x + back.w / 2, back.y + back.h / 2, 14, V11_THEME.ink, { align: 'center', weight: 900 });
   V11H_SHOP_RECTS.push({ id: 'shopBack', ...back });
+
+  // 预览框：底猫 + 所选流派 T1，实时刷新
+  const preview = { x: 700, y: 20, w: 316, h: 72 };
+  const pick = v11hShopPreview();
+  const previewCat = v11hShopPreviewCat();
+  fillRound(g, preview.x + 3, preview.y + 4, preview.w, preview.h, 13, V11_THEME.shadow);
+  fillRound(g, preview.x, preview.y, preview.w, preview.h, 13, V11_THEME.panel);
+  strokeRound(g, preview.x, preview.y, preview.w, preview.h, 13, withAlpha(pick.color, .85), 2.6);
+  fillRound(g, preview.x, preview.y, preview.w, 5, 2.5, pick.color);
+  v11hDrawFigureAt(g, preview.x + 38, preview.y + 38, 19, previewCat, pick, t, {});
+  drawText(g, '预览 · ' + previewCat.name + ' × ' + pick.name, preview.x + 72, preview.y + 26, 13, V11_THEME.ink, { weight: 900 });
+  drawText(g, 'T1 形态 · 双核心 Lv4 进阶「' + pick.def.secondName + '」', preview.x + 72, preview.y + 48, 10, V11_THEME.inkSoft, { weight: 700 });
 
   const lay = v11hShopLayout();
   for (let i = 0; i < V11_CATS.length; i++) {
@@ -17158,6 +17210,28 @@ function v11hDrawCharShop(g, t) {
     const selected = V11_CHAR.kind === 'preset' && V11_CHAR.id === cat.id;
     v11hDrawCharCard(g, r, cat, lay, selected);
     V11H_SHOP_RECTS.push({ id: 'shopPreset', presetId: cat.id, ...r });
+  }
+
+  // 流派画廊：5 个流派，点选后预览框实时换成该流派 T1 形态
+  for (let i = 0; i < V11_SCHOOLS.length; i++) {
+    const def = V11_SCHOOLS[i];
+    const r = {
+      x: lay.galleryX + i * (lay.galleryW + lay.galleryGap),
+      y: lay.galleryY, w: lay.galleryW, h: lay.galleryH,
+    };
+    const on = def.id === pick.schoolId;
+    const hov = pointRect(mouse, r);
+    fillRound(g, r.x + 3, r.y + 4, r.w, r.h, 13, V11_THEME.shadow);
+    fillRound(g, r.x, r.y, r.w, r.h, 13, on ? withAlpha(def.color, .3) : (hov ? '#fff6df' : V11_THEME.card));
+    strokeRound(g, r.x, r.y, r.w, r.h, 13, on ? def.color : withAlpha(def.color, .55), on ? 3.2 : 1.8);
+    fillRound(g, r.x, r.y, r.w, 5, 2.5, def.color);
+    v11hDrawFigureAt(g, r.x + 34, r.y + (lay.portrait ? 34 : 48), lay.portrait ? 12 : 16,
+      previewCat, { schoolId: def.id, tier: 1, color: def.color }, t,
+      { headOnly: true, fxScale: typeof V11_PROFILE !== 'undefined' && V11_PROFILE ? V11_PROFILE.particleMul : 1 });
+    drawText(g, def.name, r.x + 62, r.y + (lay.portrait ? 24 : 30), 15, V11_THEME.ink, { weight: 900 });
+    drawText(g, def.secondName, r.x + 62, r.y + (lay.portrait ? 44 : 52), 9, V11_THEME.inkSoft, { weight: 700 });
+    if (!lay.portrait) drawText(g, '核心双 Lv4 → T2', r.x + 62, r.y + 76, 9, V11_THEME.muted, { weight: 700 });
+    V11H_SHOP_RECTS.push({ id: 'shopSchool', schoolId: def.id, ...r });
   }
 
   const hasPhoto = !!V11_PHOTO;
@@ -17196,7 +17270,7 @@ function v11hDrawCharShop(g, t) {
     drawText(g, '支持 JPG / PNG / WebP，自动居中裁切并压到 ≤100KB', 480, py + ph / 2 + 12, 10, V11_THEME.muted, { weight: 700 });
   }
 
-  drawText(g, '内置猫与照片主角二选一 · 角色选择独立于存档，不进 run / save', W / 2, 704, 10, V11_THEME.muted, { align: 'center', weight: 700 });
+  drawText(g, '流派形态由战斗共鸣决定 · 底猫与照片主角二选一 · 角色选择独立于存档，不进 run / save', W / 2, 704, 10, V11_THEME.muted, { align: 'center', weight: 700 });
 }
 
 function v11hOpenCharShop(from) {
@@ -17213,12 +17287,30 @@ function v11hCloseCharShop() {
   sfx('click');
 }
 
+/* v1.1.3：主页角色入口与 v11gHomeLayout 同源。
+   桌面贴左侧设置按钮下方；小横屏放右侧链接行；竖屏作为 links 第 3 格。 */
 function v11hHomeCharRect() {
   const lay = v11gHomeLayout();
-  if (lay.portrait) return { x: 1032, y: 622, w: 192, h: 36 };
-  if (lay.compact && lay.card) return { x: lay.card.x + 24, y: lay.card.y + lay.card.h - 50, w: 210, h: 38 };
-  if (lay.card) return { x: lay.card.x + 24, y: lay.card.y + lay.card.h - 54, w: 200, h: 40 };
-  return { x: 812, y: 620, w: 200, h: 40 };
+  if (lay.portrait) return { x: 648, y: 672, w: 288, h: 44 };
+  if (lay.compact) return { x: 680, y: 606, w: 320, h: 56 };
+  return { x: 112, y: 658, w: 470, h: 48 };
+}
+
+function v11hRectOverlap(a, b) {
+  return !!(a && b && a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
+}
+let V11H_HOME_CHAR_CONFLICTS = [];
+function v11hHomeCharConflicts() {
+  const lay = v11gHomeLayout();
+  const r = v11hHomeCharRect();
+  const boxes = [];
+  if (lay.card) boxes.push({ id: 'card', r: lay.card });
+  if (lay.cur) boxes.push({ id: 'cur', r: lay.cur });
+  for (const l of lay.links) if (l.id !== 'charshop') boxes.push({ id: 'link:' + l.id, r: l });
+  if (lay.version) boxes.push({ id: 'version', r: { x: lay.version.x - 120, y: lay.version.y - 12, w: 120, h: 18 } });
+  V11H_HOME_CHAR_CONFLICTS = boxes.filter(b => v11hRectOverlap(r, b.r))
+    .map(b => ({ id: b.id, rect: Object.assign({}, b.r) }));
+  return V11H_HOME_CHAR_CONFLICTS.slice();
 }
 
 function v11hDrawMiniButton(g, r, label, accent) {
@@ -17232,6 +17324,13 @@ function v11hDrawMiniButton(g, r, label, accent) {
 
 function v11hDrawHomeCharEntry(g, t) {
   const r = v11hHomeCharRect();
+  const conflicts = v11hHomeCharConflicts();
+  if (conflicts.length) console.warn('[v1.1.3] 主页角色入口包围盒冲突', conflicts);
+  if (v11gHomeLayout().portrait) {
+    // 竖屏的第 3 格由 v11gHomeLayout.links 统一绘制，这里只同步热区。
+    V11_HOME_RECTS.charshop = r;
+    return;
+  }
   v11hDrawMiniButton(g, r, '🐱 角色选择', C.gold);
   V11_HOME_RECTS.charshop = r;
 }
@@ -17246,19 +17345,21 @@ function v11hDrawModeCharEntry(g, t) {
   drawText(g, '🐱 角色', r.x + r.w / 2, r.y + r.h / 2, 15, V11_THEME.ink, { align: 'center', weight: 900 });
 }
 
-/* ---------------- 8. 图鉴：新增「角色」分页 ---------------- */
+/* ---------------- 8. 图鉴：新增「角色 / 流派形态」分页 ---------------- */
 let V11H_BESTIARY_TAB = 'monster';
 // 顶栏中部：避开左侧标题/副标题（副标题最远约到 x≈450）与右上页码/返回键
 const V11H_TAB_MONSTER_RECT = { x: 480, y: 32, w: 120, h: 42 };
 const V11H_TAB_CHAR_RECT = { x: 608, y: 32, w: 158, h: 42 };
+const V11H_TAB_FORMS_RECT = { x: 774, y: 32, w: 140, h: 42 };
 
 function v11hDrawBestiaryTabs(g, active) {
   const pairs = [
-    [V11H_TAB_MONSTER_RECT, '怪物 / 形态', 'tabMonster'],
-    [V11H_TAB_CHAR_RECT, '角色 · 10', 'tabChar'],
+    [V11H_TAB_MONSTER_RECT, '怪物 / 形态', 'tabMonster', 'monster'],
+    [V11H_TAB_CHAR_RECT, '角色 · 10', 'tabChar', 'char'],
+    [V11H_TAB_FORMS_RECT, '流派形态 · 10', 'tabForms', 'forms'],
   ];
-  for (const [r, label, id] of pairs) {
-    const on = active === (id === 'tabChar' ? 'char' : 'monster');
+  for (const [r, label, id, key] of pairs) {
+    const on = active === key;
     const hov = pointRect(mouse, r);
     fillRound(g, r.x, r.y, r.w, r.h, 12, on ? C.gold : (hov ? '#fff6df' : V11_THEME.card));
     strokeRound(g, r.x, r.y, r.w, r.h, 12, on ? V11_THEME.line : withAlpha(C.ink, .45), on ? 3 : 1.8);
@@ -17272,7 +17373,7 @@ function v11hDrawCharBestiary(g, t) {
   v11ThemeBg(g, t, { variant: 'bestiaryChar' });
   drawText(g, '角色图鉴', 52, 42, 30, V11_THEME.ink, { weight: 900 });
   const photoCount = V11_PHOTO ? 1 : 0;
-  drawText(g, `10 只内置猫 + ${photoCount} 个自定义主角 · 每只 3 段进化必换造型`, 54, 74, 11, V11_THEME.inkSoft, { weight: 700 });
+  drawText(g, `10 只内置底猫 + ${photoCount} 个自定义主角 · 进局后按共鸣流派变形态`, 54, 74, 11, V11_THEME.inkSoft, { weight: 700 });
 
   const back = { x: 1040, y: 32, w: 184, h: 54 };
   const bh = pointRect(mouse, back);
@@ -17306,15 +17407,11 @@ function v11hDrawCharBestiary(g, t) {
     fillRound(g, x, y, cardW, 5, 2.5, accent);
 
     if (cell.kind === 'cat') {
-      drawText(g, '内置猫 · ' + cell.cat.tier, x + 12, y + 19, 10, withAlpha(C.ink, .62), { weight: 700 });
+      drawText(g, '内置底猫 · ' + cell.cat.tier, x + 12, y + 19, 10, withAlpha(C.ink, .62), { weight: 700 });
       drawText(g, selected ? '当前主角' : '可选', x + cardW - 12, y + 19, 10, accent, { align: 'right', weight: 900 });
-      const xs = [x + 62, x + 124, x + 186];
-      const sizes = [16, 19, 22];
-      for (let s = 0; s < 3; s++) v11hDrawCatHeadGeneric(g, xs[s], y + 82, sizes[s], cell.cat, s, t);
-      drawText(g, 'Lv1', x + 62, y + 112, 8, withAlpha(C.ink, .55), { align: 'center', weight: 700 });
-      drawText(g, 'Lv5', x + 124, y + 112, 8, withAlpha(C.ink, .55), { align: 'center', weight: 700 });
-      drawText(g, 'Lv10', x + 186, y + 112, 8, withAlpha(C.ink, .55), { align: 'center', weight: 700 });
-      drawText(g, cell.cat.name, x + cardW / 2, y + 138, 15, V11_THEME.ink, { align: 'center', weight: 900 });
+      v11hDrawFigureAt(g, x + cardW / 2, y + 80, 25, cell.cat, null, t, {});
+      drawText(g, cell.cat.name, x + cardW / 2, y + 132, 15, V11_THEME.ink, { align: 'center', weight: 900 });
+      drawText(g, '底猫 · 流派形态见「流派形态」分页', x + cardW / 2, y + 150, 8, V11_THEME.inkSoft, { align: 'center', weight: 700 });
       bestiaryRects.push({ id: 'charCard', presetId: cell.cat.id, x, y, w: cardW, h: cardH });
     } else if (cell.kind === 'photo') {
       drawText(g, '自定义主角', x + 12, y + 19, 10, withAlpha(C.ink, .62), { weight: 700 });
@@ -17341,10 +17438,68 @@ function v11hDrawCharBestiary(g, t) {
   drawText(g, '选中的猫会立刻替换战斗主角 · 形态数值与命中半径完全不变', W / 2, 700, 10, V11_THEME.muted, { align: 'center', weight: 700 });
 }
 
+/* B5：角色形态分页 · 1 基础 + 5 流派 × 2 阶；小图 ≤64px，手机降粒子。 */
+function v11hDrawFormsBestiary(g, t) {
+  bestiaryRects = [];
+  v11ThemeBg(g, t, { variant: 'bestiaryChar' });
+  drawText(g, '流派形态图鉴', 52, 42, 30, V11_THEME.ink, { weight: 900 });
+  drawText(g, '1 基础底猫 + 5 流派 × 2 阶 = 11 套形态 · 全部 Canvas 程序化，不使用外部图', 54, 74, 11, V11_THEME.inkSoft, { weight: 700 });
+
+  const back = { x: 1040, y: 32, w: 184, h: 54 };
+  const bh = pointRect(mouse, back);
+  fillRound(g, back.x + 3, back.y + 4, back.w, back.h, 13, V11_THEME.shadow);
+  fillRound(g, back.x, back.y, back.w, back.h, 13, bh ? C.mint : withAlpha(C.mint, .86));
+  strokeRound(g, back.x, back.y, back.w, back.h, 13, V11_THEME.line, 2.6);
+  drawText(g, '← 返回', back.x + back.w / 2, back.y + back.h / 2, 14, V11_THEME.ink, { align: 'center', weight: 900 });
+  bestiaryRects.push({ id: 'back', ...back });
+
+  v11hDrawBestiaryTabs(g, 'forms');
+
+  const cols = 4, cardW = 290, cardH = 158, gapX = 16, gapY = 14;
+  const totalW = cols * cardW + (cols - 1) * gapX;
+  const startX = (W - totalW) / 2, startY = 104;
+  const cat = v11hShopPreviewCat();
+  const mobile = typeof V11_PROFILE !== 'undefined' && V11_PROFILE && V11_PROFILE.mobile;
+  const fxScale = mobile ? .6 : 1;
+
+  const cells = [{ kind: 'base' }];
+  for (const def of V11_SCHOOLS) cells.push({ kind: 'form', schoolId: def.id, tier: 1 });
+  for (const def of V11_SCHOOLS) cells.push({ kind: 'form', schoolId: def.id, tier: 2 });
+
+  for (let i = 0; i < cells.length; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = startX + col * (cardW + gapX);
+    const y = startY + row * (cardH + gapY);
+    const cell = cells[i];
+    const def = cell.kind === 'form' ? (V11_SCHOOLS.find(d => d.id === cell.schoolId) || V11_SCHOOLS[0]) : null;
+    const accent = def ? def.color : cat.accent;
+    const name = def ? (cell.tier >= 2 ? def.secondName : def.name) : cat.name;
+    const tag = def ? (cell.tier >= 2 ? '二阶 · 双核心 Lv4' : '一阶 · 共鸣解锁') : '基础底猫 · 无流派';
+    const form = def ? { schoolId: def.id, tier: cell.tier, color: def.color, name } : null;
+
+    fillRound(g, x + 4, y + 5, cardW, cardH, 14, V11_THEME.shadow);
+    fillRound(g, x, y, cardW, cardH, 14, V11_THEME.card);
+    strokeRound(g, x, y, cardW, cardH, 14, withAlpha(accent, .62), 1.8);
+    fillRound(g, x, y, cardW, 5, 2.5, accent);
+    drawText(g, tag, x + 12, y + 20, 10, withAlpha(C.ink, .62), { weight: 700 });
+    drawText(g, def ? def.short + ' T' + cell.tier : 'BASE', x + cardW - 12, y + 20, 10, accent, { align: 'right', weight: 900 });
+    v11hDrawFigureAt(g, x + cardW / 2, y + 80, def ? 16 : 19, cat, form, t, { fxScale });
+    drawText(g, name, x + cardW / 2, y + 132, 15, V11_THEME.ink, { align: 'center', weight: 900 });
+    drawText(g, def ? def.name + ' · ' + (cell.tier >= 2 ? 'T2' : 'T1') : '脸型 + 底色微差，进局后叠加流派主题',
+      x + cardW / 2, y + 150, 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
+  }
+
+  drawText(g, '底猫只决定脸型与底色 · 流派主题占 85%+ · 手机粒子按档位 ×0.6', W / 2, 690, 10, V11_THEME.muted, { align: 'center', weight: 700 });
+}
+
 const V11H_LEGACY_BESTIARY = v11DrawBestiaryScreen;
 v11DrawBestiaryScreen = function (g, t) {
   if (V11H_BESTIARY_TAB === 'char') {
     v11hDrawCharBestiary(g, t);
+    return;
+  }
+  if (V11H_BESTIARY_TAB === 'forms') {
+    v11hDrawFormsBestiary(g, t);
     return;
   }
   V11H_LEGACY_BESTIARY(g, t);
@@ -17386,6 +17541,7 @@ handleDown = function (ev) {
     if (!hit) return;
     if (hit.id === 'shopBack') { v11hCloseCharShop(); return; }
     if (hit.id === 'shopPreset') { V11H_LAST_PRESET = hit.presetId; v11hSetPreset(hit.presetId); return; }
+    if (hit.id === 'shopSchool') { V11H_SHOP_PREVIEW = hit.schoolId; sfx('click'); return; }
     if (hit.id === 'shopPhoto') {
       if (V11H_IMPORTING) { showToast('照片还在处理中，稍等一下', C.gold, 2); return; }
       v11hPickPhotoFile();
@@ -17419,6 +17575,11 @@ handleDown = function (ev) {
       }
       if (hit.id === 'tabChar') {
         V11H_BESTIARY_TAB = 'char';
+        sfx('click');
+        return;
+      }
+      if (hit.id === 'tabForms') {
+        V11H_BESTIARY_TAB = 'forms';
         sfx('click');
         return;
       }
@@ -17521,7 +17682,7 @@ try {
             cat: Object.assign({}, v11hCurrentCat()),
             photo: !!V11_PHOTO,
             photoReady: !!V11_PHOTO_IMG,
-            formNames: FORMS.slice(0, 3).map(f => f.name),
+            formNames: [v11hCurrentCat().name],
           };
         },
         setPreset: function (id) { return v11hSetPreset(id, { silent: true }); },
@@ -17533,12 +17694,51 @@ try {
         closeShop: function () { v11hCloseCharShop(); return state; },
         shopLayout: v11hShopLayout,
         shopRects: function () { return V11H_SHOP_RECTS.map(r => Object.assign({}, r)); },
+        shopPreview: function (schoolId) {
+          if (typeof schoolId === 'string') V11H_SHOP_PREVIEW = schoolId;
+          const p = v11hShopPreview();
+          return { schoolId: p.schoolId, tier: p.tier, name: p.name, color: p.color, cat: v11hShopPreviewCat().name };
+        },
         bestiaryTab: function () { return V11H_BESTIARY_TAB; },
         setBestiaryTab: function (tab) {
-          V11H_BESTIARY_TAB = tab === 'char' ? 'char' : 'monster';
+          V11H_BESTIARY_TAB = tab === 'char' ? 'char' : (tab === 'forms' ? 'forms' : 'monster');
           return V11H_BESTIARY_TAB;
         },
-        stageNames: function () { return FORMS.slice(0, 3).map(f => f.name); },
+        schoolForms: function () {
+          return V11_SCHOOLS.map(d => ({
+            id: d.id, name: d.name, secondName: d.secondName, color: d.color,
+            t1: !!V11_SCHOOL_FORMS[d.id], t2: !!(V11_SCHOOL_FORMS[d.id] && V11_SCHOOL_FORMS[d.id].t2),
+          }));
+        },
+        activeForm: v11hActiveSchoolForm,
+        stageNames: function () { return [v11hCurrentCat().name]; },
+        /* 验收辅助：formId 为空画底猫，否则画对应流派 T1/T2 立绘。 */
+        renderForm: function (schoolId, tier) {
+          const c = document.createElement('canvas');
+          c.width = 200; c.height = 200;
+          const g = c.getContext('2d');
+          const cat = v11hShopPreviewCat();
+          const def = V11_SCHOOLS.find(d => d.id === schoolId) || null;
+          const form = def ? {
+            schoolId: def.id, tier: clamp(Math.round(tier || 1), 1, 2),
+            color: def.color, name: tier >= 2 ? def.secondName : def.name,
+          } : null;
+          v11hDrawFigureAt(g, 100, 100, 26, cat, form, 1.7, {});
+          return c.toDataURL('image/png');
+        },
+        /* 验收辅助：照片主角 + 流派半透明叠加。 */
+        renderPhotoForm: function (schoolId, tier) {
+          const c = document.createElement('canvas');
+          c.width = 160; c.height = 160;
+          const g = c.getContext('2d');
+          const def = V11_SCHOOLS.find(d => d.id === schoolId) || null;
+          const form = def ? {
+            schoolId: def.id, tier: clamp(Math.round(tier || 1), 1, 2),
+            color: def.color, name: tier >= 2 ? def.secondName : def.name,
+          } : null;
+          v11DrawPhotoCat(g, 80, 80, 40, form, 1.7, form ? form.color : null);
+          return c.toDataURL('image/png');
+        },
         /* 验收辅助：把当前主角的第 n 阶头像/立绘画到离屏 canvas，返回 PNG。 */
         renderHead: function (stage) {
           const st = clamp(Math.round(stage || 0), 0, 2);
@@ -17563,13 +17763,16 @@ try {
         },
       },
       modeCharRect: function () { return Object.assign({}, V11H_MODE_CHAR_RECT); },
+      homeChar: function () {
+        return { rect: v11hHomeCharRect(), conflicts: v11hHomeCharConflicts() };
+      },
     });
   }
 } catch (e) { /* 调试接口失败不影响游戏 */ }
 
 /* ==== _v11i.js ==== */
 /* ==================================================================
-   v1.1.2 LAYER · I：T3a 升级刷新 / 三档关卡上限 / 通关页
+   v1.1.3 LAYER · I：流派驱动进化 / 10 套流派形态 / 升级刷新 / 三档关卡上限 / 通关页
    ------------------------------------------------------------------
    - openUpgrade() 每次把 run.upgradeRefreshLeft 重置为 2
    - 升级页「🔄 刷新（剩 N 次）」按钮 + 快捷键 R，重摇不消耗升级次数
@@ -17638,7 +17841,9 @@ drawUpgradeScreen = function (g, t) {
   drawText(g, 'CHOOSE YOUR CAT POWER', W / 2, 28, 12, withAlpha(C.gold, .8), { align: 'center', weight: 900 });
   drawText(g, '等级提升 · 三选一', W / 2, 62, 36, C.cream, { align: 'center', line: 7, weight: 900 });
   const remaining = run ? run.pendingLevelUps : 1;
-  drawText(g, `猫猫 Lv.${player.level} · 还有 ${remaining} 次选择 · 当前形态「${FORMS[player.form || 0].name}」`,
+  const activeForm = typeof v11hActiveSchoolForm === 'function' ? v11hActiveSchoolForm() : null;
+  const formLabel = activeForm ? activeForm.name : v11hCurrentCat().name;
+  drawText(g, `猫猫 Lv.${player.level} · 还有 ${remaining} 次选择 · 当前形态「${formLabel}」`,
     W / 2, 98, 12, withAlpha(C.cream, .7), { align: 'center', weight: 700 });
 
   // T3b：已解锁的流派共鸣徽章（与下方刷新按钮同页）
@@ -17980,6 +18185,678 @@ const V11_SCHOOLS = [
   },
 ];
 
+/* ==================================================================
+   v1.1.3：流派驱动进化 · 10 套 Canvas 程序化形态
+   ------------------------------------------------------------------
+   - 5 流派 × 2 阶；颜色沿用 V11_SCHOOLS 的 color
+   - 每个函数 (g, r, cat, t, o)：先画底猫，再叠流派剪影
+   - o.headOnly：只画头 + 冠饰；o.overlayOnly：照片叠加，只取外围层
+   - o.fxScale：手机 / 小图降粒子（.6）；不缩放底猫
+   - 禁止外部图 / 每帧 new Image / 每帧新建渐变
+   ================================================================== */
+const V11_SCHOOL_FORMS = {
+  combo: { t1: v11iDrawComboT1, t2: v11iDrawComboT2 },
+  burst: { t1: v11iDrawBurstT1, t2: v11iDrawBurstT2 },
+  area: { t1: v11iDrawAreaT1, t2: v11iDrawAreaT2 },
+  summon: { t1: v11iDrawSummonT1, t2: v11iDrawSummonT2 },
+  heal: { t1: v11iDrawHealT1, t2: v11iDrawHealT2 },
+};
+
+function v11iFormFx(o) {
+  return clamp((o && o.fxScale) || 1, .5, 1.2);
+}
+
+function v11iFormPoly(g, pts, fill, stroke, lw) {
+  if (!pts || !pts.length) return;
+  g.beginPath();
+  g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+  g.closePath();
+  if (fill) { g.fillStyle = fill; g.fill(); }
+  if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw || 1.5; g.stroke(); }
+}
+
+/* 底猫：缩放 .72~.82，让流派剪影占 85%+；overlayOnly 时完全不画。 */
+function v11iFormBase(g, r, cat, t, o, scale) {
+  if (o && o.overlayOnly) return;
+  const headOnly = !!(o && o.headOnly);
+  const s = headOnly ? .92 : (scale || .8);
+  g.save();
+  g.scale(s, s);
+  v11hDrawCatBase(g, r, cat, t, {
+    headOnly,
+    hideWeapon: true,
+    aim: o && o.aim,
+    blink: o && o.blink,
+    dead: o && o.dead,
+    moving: o && o.moving,
+    attackAnim: o && o.attackAnim,
+    attackAnimMax: o && o.attackAnimMax,
+  });
+  g.restore();
+}
+
+/* 无渐变的多层柔光，避免每帧 createRadialGradient。 */
+function v11iFormGlow(g, x, y, rad, color, alpha) {
+  g.save();
+  for (let i = 3; i >= 1; i--) {
+    g.fillStyle = withAlpha(color, alpha * i / 4);
+    g.beginPath(); g.arc(x, y, rad * i / 3, 0, TAU); g.fill();
+  }
+  g.restore();
+}
+
+/* 幽灵小猫随从：尖耳 + 圆头 + 波浪下摆。 */
+function v11iFormGhost(g, x, y, s, color, alpha, ink) {
+  g.save();
+  g.globalAlpha = alpha;
+  g.fillStyle = withAlpha(color, .55);
+  g.strokeStyle = withAlpha(ink, .55);
+  g.lineWidth = Math.max(.8, s * .12);
+  for (const sx of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(x + sx * s * .3, y - s * .2);
+    g.lineTo(x + sx * s * .64, y - s * .72);
+    g.lineTo(x + sx * s * .78, y - s * .12);
+    g.closePath(); g.fill(); g.stroke();
+  }
+  g.beginPath(); g.arc(x, y, s, 0, TAU); g.fill(); g.stroke();
+  g.beginPath();
+  g.moveTo(x - s * .86, y + s * .3);
+  g.lineTo(x + s * .86, y + s * .3);
+  g.lineTo(x + s * .86, y + s * 1.05);
+  g.quadraticCurveTo(x + s * .58, y + s * 1.3, x + s * .3, y + s * 1.05);
+  g.quadraticCurveTo(x, y + s * 1.32, x - s * .3, y + s * 1.05);
+  g.quadraticCurveTo(x - s * .58, y + s * 1.3, x - s * .86, y + s * 1.05);
+  g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = withAlpha(ink, .8);
+  for (const sx of [-1, 1]) {
+    g.beginPath(); g.arc(x + sx * s * .3, y + s * .02, s * .12, 0, TAU); g.fill();
+  }
+  g.restore();
+}
+
+/* ---------------- 连击流：残影箭形猫 ---------------- */
+function v11iDrawComboT1(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.coral, aux = C.mint, ink = C.ink;
+  const fx = v11iFormFx(o);
+  if (!o.headOnly) {
+    g.save();
+    // 速度残影线
+    for (let i = 0; i < 4; i++) {
+      const yy = -r * .78 + i * r * .44;
+      g.strokeStyle = withAlpha(aux, .42 - i * .07);
+      g.lineWidth = Math.max(1, r * .05);
+      g.beginPath();
+      g.moveTo(-r * 1.62 - (i % 2) * r * .2, yy);
+      g.lineTo(-r * .48, yy);
+      g.stroke();
+    }
+    // 风车阵
+    const blades = Math.max(3, Math.round(4 * fx));
+    for (let i = 0; i < blades; i++) {
+      const a = t * 2.4 + i * TAU / blades;
+      const cx = Math.cos(a) * r * 1.28, cy = Math.sin(a) * r * .82;
+      g.save(); g.translate(cx, cy); g.rotate(a * 1.7);
+      v11iFormPoly(g, [[0, 0], [r * .46, 0], [r * .16, r * .18]],
+        withAlpha(col, .5), withAlpha(aux, .6), .8);
+      g.restore();
+    }
+    g.restore();
+  }
+  v11iFormBase(g, r, cat, t, o, .8);
+  // 箭形轮廓：空心 + 低透明填充，不遮脸
+  g.save();
+  g.strokeStyle = withAlpha(col, .95); g.lineWidth = Math.max(1.5, r * .075);
+  g.fillStyle = withAlpha(col, .1);
+  g.beginPath();
+  g.moveTo(-r * .92, -r * .98); g.lineTo(r * 1.42, -r * .58);
+  g.lineTo(r * 1.7, 0); g.lineTo(r * 1.42, r * .58);
+  g.lineTo(-r * .92, r * .98); g.lineTo(-r * .46, 0);
+  g.closePath(); g.fill(); g.stroke();
+  g.strokeStyle = withAlpha(C.white, .62); g.lineWidth = Math.max(1, r * .045);
+  g.beginPath(); g.arc(0, r * .06, r * 1.22, -.8, .55); g.stroke();
+  g.restore();
+  if (o.headOnly) {
+    g.save();
+    for (let i = 0; i < 3; i++) {
+      const a = t * 2.5 + i * TAU / 3;
+      g.save(); g.translate(Math.cos(a) * r * 1.25, Math.sin(a) * r * .72);
+      v11iFormPoly(g, [[0, 0], [r * .42, 0], [r * .14, r * .16]], withAlpha(col, .55), withAlpha(ink, .3), .7);
+      g.restore();
+    }
+    g.strokeStyle = withAlpha(aux, .5); g.lineWidth = Math.max(1, r * .05);
+    for (let i = 0; i < 2; i++) {
+      g.beginPath(); g.moveTo(-r * 1.35, -r * .2 + i * r * .5); g.lineTo(-r * .8, -r * .2 + i * r * .5); g.stroke();
+    }
+    g.restore();
+  }
+}
+
+function v11iDrawComboT2(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.coral, aux = C.mint, ink = C.ink;
+  const fx = v11iFormFx(o);
+  if (!o.headOnly) {
+    // 多重分身：两只完整箭形残影猫（尖耳 + 眼光 + 速度线，不再是粉色团块）
+    g.save();
+    for (let k = 0; k < 2; k++) {
+      const ox = -r * (1.52 + k * .52), oy = -r * .06 + k * r * .28;
+      g.save();
+      g.globalAlpha = .46 - k * .14;
+      g.strokeStyle = withAlpha(aux, .8); g.lineWidth = Math.max(1, r * .055);
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        g.moveTo(ox - r * 1.05, oy - r * .22 + i * r * .26);
+        g.lineTo(ox - r * .42, oy - r * .22 + i * r * .26);
+        g.stroke();
+      }
+      // 箭形身体（指向右）
+      v11iFormPoly(g, [[ox - r * .5, oy - r * .2], [ox + r * .52, oy + r * .02], [ox - r * .12, oy + r * .34]],
+        withAlpha(col, .85), withAlpha(aux, .9), Math.max(1, r * .05));
+      // 头 + 双尖耳
+      circle(g, ox - r * .4, oy - r * .26, r * .3, withAlpha(col, .8), withAlpha(aux, .9), Math.max(1, r * .055));
+      v11iFormPoly(g, [[ox - r * .62, oy - r * .44], [ox - r * .8, oy - r * .86], [ox - r * .4, oy - r * .6]],
+        withAlpha(col, .8), withAlpha(aux, .85), Math.max(1, r * .045));
+      v11iFormPoly(g, [[ox - r * .3, oy - r * .5], [ox - r * .18, oy - r * .9], [ox + r * .02, oy - r * .52]],
+        withAlpha(col, .8), withAlpha(aux, .85), Math.max(1, r * .045));
+      // 白色眼光
+      g.strokeStyle = withAlpha(C.white, .9); g.lineWidth = Math.max(1, r * .06);
+      g.beginPath(); g.moveTo(ox - r * .52, oy - r * .3); g.lineTo(ox - r * .24, oy - r * .26); g.stroke();
+      g.restore();
+    }
+    // 6 片风车刃
+    const blades = Math.max(4, Math.round(6 * fx));
+    for (let i = 0; i < blades; i++) {
+      const a = t * 3 + i * TAU / blades;
+      g.save(); g.translate(Math.cos(a) * r * 1.55, Math.sin(a) * r * 1.02); g.rotate(a * 1.9);
+      v11iFormPoly(g, [[0, 0], [r * .58, 0], [r * .2, r * .2]], withAlpha(col, .55), withAlpha(aux, .7), .9);
+      g.restore();
+    }
+    g.restore();
+  }
+  v11iFormBase(g, r, cat, t, o, .76);
+  g.save();
+  // 双层箭形轮廓 + 刃光
+  g.strokeStyle = withAlpha(col, .95); g.lineWidth = Math.max(1.8, r * .085);
+  g.fillStyle = withAlpha(col, .12);
+  g.beginPath();
+  g.moveTo(-r * 1.05, -r * 1.08); g.lineTo(r * 1.5, -r * .68);
+  g.lineTo(r * 1.92, 0); g.lineTo(r * 1.5, r * .68);
+  g.lineTo(-r * 1.05, r * 1.08); g.lineTo(-r * .52, 0);
+  g.closePath(); g.fill(); g.stroke();
+  g.strokeStyle = withAlpha(aux, .55); g.lineWidth = Math.max(1.2, r * .05);
+  g.beginPath(); g.arc(0, r * .05, r * 1.42, -.85, .62); g.stroke();
+  // 刃光：头顶与下腹两道交叉弧光，避开脸
+  g.strokeStyle = withAlpha(C.white, .9); g.lineWidth = Math.max(1.4, r * .06);
+  g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-r * 1.32, -r * .98); g.quadraticCurveTo(r * .2, -r * 1.52, r * 1.62, -r * .62); g.stroke();
+  g.beginPath(); g.moveTo(-r * 1.28, r * .96); g.quadraticCurveTo(r * .2, r * 1.5, r * 1.6, r * .6); g.stroke();
+  g.strokeStyle = withAlpha(aux, .85); g.lineWidth = Math.max(1.2, r * .05);
+  for (let i = 0; i < 3; i++) {
+    const yy = -r * .5 + i * r * .5;
+    g.beginPath(); g.moveTo(r * .9, yy - r * .1); g.lineTo(r * 1.62, yy + r * .1); g.stroke();
+  }
+  g.restore();
+  if (o.headOnly) {
+    g.save();
+    for (let i = 0; i < 4; i++) {
+      const a = t * 3 + i * TAU / 4;
+      g.save(); g.translate(Math.cos(a) * r * 1.4, Math.sin(a) * r * .8); g.rotate(a * 2);
+      v11iFormPoly(g, [[0, 0], [r * .5, 0], [r * .18, r * .18]], withAlpha(col, .55), withAlpha(aux, .7), .8);
+      g.restore();
+    }
+    g.restore();
+  }
+}
+
+/* ---------------- 爆发流：熔岩重甲坦克猫 ---------------- */
+function v11iDrawBurstT1(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.gold, aux = C.coralDeep, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.3, r * .07);
+  // 宽体暗底盘：剪影从“猫”拉成“坦克”，比底猫宽 2.4 倍
+  v11iFormPoly(g, [
+    [-r * 1.32, -r * .44], [r * 1.32, -r * .44],
+    [r * 1.18, r * 1.08], [-r * 1.18, r * 1.08],
+  ], withAlpha(ink, .16), null, 0);
+  // 后层：巨角 + 宽肩甲底座（底猫压在上面，只露出外侧硬轮廓）
+  g.save();
+  for (const sx of [-1, 1]) {
+    v11iFormPoly(g, [[sx * r * .5, -r * .5], [sx * r * 1.08, -r * 1.38], [sx * r * 1.02, -r * .3]],
+      withAlpha(aux, .5), ink, lw * 1.2);
+    v11iFormPoly(g, [[sx * r * .46, -r * .4], [sx * r * 1.58, -r * .56], [sx * r * 1.64, r * .36], [sx * r * .5, r * .6]],
+      withAlpha(col, .62), ink, lw * 1.4);
+  }
+  g.restore();
+  v11iFormBase(g, r, cat, t, o, .7);
+  g.save();
+  if (o.headOnly) {
+    // 小图：只留双巨角 + 肩甲块 + 熔岩核心
+    for (const sx of [-1, 1]) {
+      v11iFormPoly(g, [[sx * r * .5, -r * .5], [sx * r * 1.08, -r * 1.4], [sx * r * 1.02, -r * .3]],
+        withAlpha(aux, .55), ink, lw * 1.2);
+      v11iFormPoly(g, [[sx * r * .5, r * .12], [sx * r * 1.22, -r * .02], [sx * r * 1.3, r * .52], [sx * r * .58, r * .66]],
+        withAlpha(col, .62), ink, lw * 1.2);
+    }
+    v11iFormGlow(g, 0, r * .56, r * .3, aux, .55);
+    circle(g, 0, r * .56, r * .17, aux, ink, lw);
+  } else {
+    // 胸甲：宽六边形厚板 + 双排铆钉
+    v11iFormPoly(g, [
+      [-r * .86, r * .02], [-r * .95, r * .82], [-r * .52, r * 1.02],
+      [r * .52, r * 1.02], [r * .95, r * .82], [r * .86, r * .02],
+    ], withAlpha(col, .62), ink, lw * 1.5);
+    for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) {
+      circle(g, sx * r * .7, r * .26 + i * r * .3, r * .055, withAlpha(ink, .7), null, 0);
+    }
+    // 肩甲前缘高光 + 铆钉（补在底猫之上）
+    for (const sx of [-1, 1]) {
+      g.strokeStyle = withAlpha(col, .95); g.lineWidth = lw;
+      g.beginPath(); g.moveTo(sx * r * .5, -r * .42); g.lineTo(sx * r * 1.56, -r * .58); g.stroke();
+      for (let i = 0; i < 2; i++) circle(g, sx * r * (1.18 + i * .24), -r * .16 + i * r * .28, r * .06, withAlpha(ink, .7), null, 0);
+    }
+    // 胸口熔岩核心
+    v11iFormGlow(g, 0, r * .5, r * .36, aux, .55);
+    circle(g, 0, r * .5, r * .19, aux, ink, lw);
+    circle(g, 0, r * .5, r * .27, null, withAlpha(col, .9), lw * .8);
+    drawStar(g, 0, r * .5, r * .1, r * .045, 5, col, null, 0, t * .7);
+    // 巨炮拳：炮身 + 制退器（两侧硬边，不再只是两根线）
+    fillRound(g, r * .48, r * .18, r * .92, r * .42, r * .1, withAlpha(col, .8));
+    roundRectPath(g, r * .48, r * .18, r * .92, r * .42, r * .1);
+    g.strokeStyle = ink; g.lineWidth = lw * 1.2; g.stroke();
+    fillRound(g, r * 1.34, r * .12, r * .4, r * .54, r * .08, withAlpha(aux, .8));
+    roundRectPath(g, r * 1.34, r * .12, r * .4, r * .54, r * .08);
+    g.strokeStyle = ink; g.lineWidth = lw; g.stroke();
+    g.strokeStyle = ink; g.lineWidth = Math.max(1.2, r * .06);
+    for (let i = 0; i < 2; i++) {
+      g.beginPath(); g.moveTo(r * 1.7, r * .2 + i * r * .26); g.lineTo(r * 1.9, r * .2 + i * r * .26); g.stroke();
+    }
+    // 脚甲
+    for (const sx of [-1, 1]) {
+      fillRound(g, sx * r * .5 - r * .3, r * .88, r * .6, r * .24, r * .08, withAlpha(col, .58));
+      roundRectPath(g, sx * r * .5 - r * .3, r * .88, r * .6, r * .24, r * .08);
+      g.strokeStyle = ink; g.lineWidth = lw * .9; g.stroke();
+    }
+    // 地面熔岩裂缝
+    g.strokeStyle = withAlpha(aux, .8); g.lineWidth = Math.max(1, r * .05);
+    g.beginPath();
+    g.moveTo(-r * 1.05, r * 1.04); g.lineTo(-r * .62, r * .96); g.lineTo(-r * .36, r * 1.1); g.lineTo(r * .12, r * 1.02);
+    g.lineTo(r * .5, r * 1.12); g.lineTo(r * .95, r * 1.02);
+    g.stroke();
+    // 熔岩火星
+    const sparks = Math.max(3, Math.round(4 * fx));
+    for (let i = 0; i < sparks; i++) {
+      const a = t * 1.4 + i * TAU / sparks;
+      drawStar(g, Math.cos(a) * r * 1.4, r * .1 + Math.sin(a) * r * .7, r * .07, r * .03, 4, col, withAlpha(aux, .7), lw * .6, a);
+    }
+  }
+  g.restore();
+}
+
+function v11iDrawBurstT2(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.gold, aux = C.coralDeep, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.4, r * .075);
+  // 更宽更方的底盘
+  v11iFormPoly(g, [
+    [-r * 1.5, -r * .52], [r * 1.5, -r * .52],
+    [r * 1.32, r * 1.12], [-r * 1.32, r * 1.12],
+  ], withAlpha(ink, .2), null, 0);
+  // 后层：高角盔 + 三尖肩甲 + 两侧熔岩柱
+  g.save();
+  for (const sx of [-1, 1]) {
+    v11iFormPoly(g, [[sx * r * .52, -r * .52], [sx * r * 1.18, -r * 1.62], [sx * r * 1.06, -r * .3]],
+      withAlpha(aux, .55), ink, lw * 1.2);
+    v11iFormPoly(g, [[sx * r * .46, -r * .42], [sx * r * 1.7, -r * .62], [sx * r * 1.76, r * .38], [sx * r * .5, r * .62]],
+      withAlpha(col, .66), ink, lw * 1.5);
+    for (let i = 0; i < 3; i++) {
+      const x0 = sx * (r * .7 + i * r * .3);
+      v11iFormPoly(g, [[x0, -r * .2], [x0 + sx * r * .36, -r * 1.06], [x0 + sx * r * .1, -r * .04]],
+        withAlpha(col, .58), ink, lw * .9);
+    }
+    v11iFormPoly(g, [[sx * r * 1.5, r * 1.12], [sx * r * 1.74, r * .06], [sx * r * 2.0, r * .46], [sx * r * 1.82, r * 1.1]],
+      withAlpha(aux, .35), withAlpha(col, .85), lw * .9);
+  }
+  g.restore();
+  v11iFormBase(g, r, cat, t, o, .68);
+  g.save();
+  if (o.headOnly) {
+    // 小图：高角 + 三尖肩甲 + 双环核心
+    for (const sx of [-1, 1]) {
+      v11iFormPoly(g, [[sx * r * .52, -r * .52], [sx * r * 1.2, -r * 1.64], [sx * r * 1.06, -r * .3]],
+        withAlpha(aux, .6), ink, lw * 1.2);
+      for (let i = 0; i < 3; i++) {
+        const x0 = sx * (r * .6 + i * r * .22);
+        v11iFormPoly(g, [[x0, r * .14], [x0 + sx * r * .26, r * .66], [x0 - sx * r * .1, r * .5]],
+          withAlpha(col, .58), ink, lw * .8);
+      }
+    }
+    v11iFormGlow(g, 0, r * .58, r * .38, aux, .6);
+    circle(g, 0, r * .58, r * .2, aux, ink, lw);
+    circle(g, 0, r * .58, r * .3, null, withAlpha(col, .9), lw * .8);
+  } else {
+    // 重型双层胸甲
+    v11iFormPoly(g, [
+      [-r * 1.02, r * .04], [-r * 1.12, r * .9], [-r * .62, r * 1.14],
+      [r * .62, r * 1.14], [r * 1.12, r * .9], [r * 1.02, r * .04],
+    ], withAlpha(col, .64), ink, lw * 1.6);
+    fillRound(g, -r * .58, r * .28, r * 1.16, r * .62, r * .12, withAlpha(aux, .32));
+    roundRectPath(g, -r * .58, r * .28, r * 1.16, r * .62, r * .12);
+    g.strokeStyle = ink; g.lineWidth = lw; g.stroke();
+    // 肩甲前缘 + 铆钉
+    for (const sx of [-1, 1]) {
+      g.strokeStyle = withAlpha(col, .95); g.lineWidth = lw * 1.1;
+      g.beginPath(); g.moveTo(sx * r * .5, -r * .44); g.lineTo(sx * r * 1.7, -r * .64); g.stroke();
+      for (let i = 0; i < 3; i++) circle(g, sx * r * (1.16 + i * r * .22), -r * .2 + i * r * .26, r * .058, withAlpha(ink, .7), null, 0);
+    }
+    // 熔岩核心双环 + 星
+    v11iFormGlow(g, 0, r * .56, r * .5, aux, .65);
+    circle(g, 0, r * .56, r * .22, aux, ink, lw);
+    circle(g, 0, r * .56, r * .32, null, withAlpha(col, .9), lw);
+    drawStar(g, 0, r * .56, r * .12, r * .05, 5, col, null, 0, t * .9);
+    // 双管巨炮 + 制退器
+    fillRound(g, r * .5, r * .1, r * 1.02, r * .48, r * .12, withAlpha(col, .78));
+    roundRectPath(g, r * .5, r * .1, r * 1.02, r * .48, r * .12);
+    g.strokeStyle = ink; g.lineWidth = lw * 1.2; g.stroke();
+    fillRound(g, r * 1.44, r * .02, r * .44, r * .64, r * .08, withAlpha(aux, .8));
+    roundRectPath(g, r * 1.44, r * .02, r * .44, r * .64, r * .08);
+    g.strokeStyle = ink; g.lineWidth = lw; g.stroke();
+    g.strokeStyle = ink; g.lineWidth = Math.max(1.4, r * .07);
+    for (let i = 0; i < 2; i++) {
+      g.beginPath(); g.moveTo(r * 1.84, r * .1 + i * r * .3); g.lineTo(r * 2.02, r * .1 + i * r * .3); g.stroke();
+    }
+    // 脚甲
+    for (const sx of [-1, 1]) {
+      fillRound(g, sx * r * .55 - r * .34, r * .98, r * .68, r * .26, r * .08, withAlpha(col, .6));
+      roundRectPath(g, sx * r * .55 - r * .34, r * .98, r * .68, r * .26, r * .08);
+      g.strokeStyle = ink; g.lineWidth = lw; g.stroke();
+    }
+    // 熔岩喷涌 + 火星
+    const embers = Math.max(4, Math.round(6 * fx));
+    for (let i = 0; i < embers; i++) {
+      const a = t * 1.6 + i * TAU / embers;
+      const ex = Math.cos(a) * r * 1.62, ey = r * .1 + Math.sin(a) * r * .86 - (i % 2) * r * .1;
+      drawStar(g, ex, ey, r * .085, r * .035, 4, col, withAlpha(aux, .7), lw * .6, a);
+    }
+  }
+  g.restore();
+}
+
+/* ---------------- 范围流：星环曼陀罗猫 ---------------- */
+function v11iDrawAreaT1(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.mint, aux = C.lavender, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.2, r * .06);
+  v11iFormBase(g, r, cat, t, o, .8);
+  const cy = o.headOnly ? 0 : r * .1;
+  g.save();
+  for (const rad of [1.34, 1.56]) {
+    g.strokeStyle = withAlpha(col, .72); g.lineWidth = lw;
+    g.beginPath(); g.ellipse(0, cy, r * rad, r * rad * .92, 0, 0, TAU); g.stroke();
+  }
+  // 同心曼陀罗花瓣
+  const petals = Math.max(6, Math.round(8 * fx));
+  for (let i = 0; i < petals; i++) {
+    const a = t * .24 + i * TAU / petals;
+    const ix = Math.cos(a) * r * 1.06, iy = cy + Math.sin(a) * r * .98;
+    const tx = Math.cos(a) * r * 1.6, ty = cy + Math.sin(a) * r * 1.47;
+    const nx = Math.cos(a + Math.PI / 2) * r * .19, ny = Math.sin(a + Math.PI / 2) * r * .18;
+    v11iFormPoly(g, [[ix + nx, iy + ny], [tx, ty], [ix - nx, iy - ny]],
+      withAlpha(aux, .22), withAlpha(col, .78), lw);
+  }
+  for (let i = 0; i < Math.max(2, Math.round(3 * fx)); i++) {
+    const a = -t * 1.1 + i * TAU / 3;
+    drawStar(g, Math.cos(a) * r * 1.42, cy + Math.sin(a) * r * 1.3, r * .1, r * .045, 5, col, null, 0, a);
+  }
+  g.restore();
+}
+
+function v11iDrawAreaT2(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.mint, aux = C.lavender, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.3, r * .065);
+  v11iFormBase(g, r, cat, t, o, .76);
+  const cy = o.headOnly ? 0 : r * .06;
+  g.save();
+  for (const rad of [1.34, 1.56, 1.8]) {
+    g.strokeStyle = withAlpha(rad === 1.8 ? aux : col, .78); g.lineWidth = lw;
+    g.beginPath(); g.ellipse(0, cy, r * rad, r * rad * .9, 0, 0, TAU); g.stroke();
+  }
+  // 双圈刻度
+  for (let i = 0; i < 16; i++) {
+    const a = -t * .35 + i * TAU / 16;
+    const r0 = r * 1.82, r1 = r * 1.94;
+    g.strokeStyle = withAlpha(i % 2 ? col : aux, .7); g.lineWidth = lw * .7;
+    g.beginPath();
+    g.moveTo(Math.cos(a) * r0, cy + Math.sin(a) * r0 * .9);
+    g.lineTo(Math.cos(a) * r1, cy + Math.sin(a) * r1 * .9);
+    g.stroke();
+  }
+  // 双层曼陀罗
+  const petals = Math.max(8, Math.round(16 * fx));
+  for (let i = 0; i < petals; i++) {
+    const a = t * .28 + i * TAU / petals;
+    const ri = i % 2 ? r * 1.12 : r * 1.04;
+    const tx = Math.cos(a) * r * (i % 2 ? 1.92 : 1.74);
+    const ty = cy + Math.sin(a) * r * (i % 2 ? 1.76 : 1.6);
+    const nx = Math.cos(a + Math.PI / 2) * r * .2, ny = Math.sin(a + Math.PI / 2) * r * .19;
+    v11iFormPoly(g, [[Math.cos(a) * ri + nx, cy + Math.sin(a) * ri * .94 + ny], [tx, ty], [Math.cos(a) * ri - nx, cy + Math.sin(a) * ri * .94 - ny]],
+      withAlpha(i % 2 ? aux : col, .2), withAlpha(i % 2 ? col : aux, .8), lw * .8);
+  }
+  // 莲华底座
+  if (!o.headOnly) {
+    for (let i = 0; i < 7; i++) {
+      const a = Math.PI * .18 + i * Math.PI * .11;
+      v11iFormPoly(g, [[0, r * .92], [Math.cos(a) * r * 1.5, r * .86], [Math.cos(a) * r * 1.12, r * 1.28]],
+        withAlpha(aux, .3), withAlpha(col, .72), lw * .7);
+    }
+  }
+  drawStar(g, 0, cy + r * .1, r * .22, r * .09, 8, withAlpha(col, .8), withAlpha(aux, .9), lw, t * .4);
+  g.restore();
+}
+
+/* ---------------- 召唤流：星灵法师猫 ---------------- */
+function v11iDrawSummonT1(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.lavender, aux = C.purple, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.2, r * .06);
+  v11iFormBase(g, r, cat, t, o, .78);
+  g.save();
+  // 法师斗篷剪影
+  if (!o.headOnly && !o.overlayOnly) {
+    v11iFormPoly(g, [[-r * .62, r * .02], [-r * .98, r * 1.08], [r * .98, r * 1.08], [r * .62, r * .02]],
+      withAlpha(aux, .3), withAlpha(col, .8), lw);
+    for (let i = 0; i < 3; i++) {
+      const a = i * TAU / 3 + t * .18;
+      drawStar(g, Math.cos(a) * r * .55, r * .62 + Math.sin(a) * r * .18, r * .07, r * .03, 4, col, null, 0, a);
+    }
+  }
+  // 尖帽（一阶）
+  const brimY = -r * .78;
+  const apexY = o.headOnly ? -r * 1.7 : -r * 2.08;
+  v11iFormPoly(g, [[-r * .62, brimY], [0, apexY], [r * .62, brimY]], withAlpha(aux, .55), withAlpha(col, .9), lw);
+  g.beginPath(); g.ellipse(0, brimY, r * .78, r * .16, 0, 0, TAU);
+  g.fillStyle = withAlpha(col, .55); g.fill();
+  g.strokeStyle = ink; g.lineWidth = lw * .8; g.stroke();
+  drawStar(g, 0, apexY, r * .13, r * .055, 5, col, withAlpha(aux, .8), lw, t * .5);
+  // 幽灵小猫随从
+  if (o.headOnly) {
+    v11iFormGhost(g, r * .95, -r * .12 + Math.sin(t * 2) * r * .06, r * .2, col, .75, ink);
+  } else {
+    v11iFormGhost(g, -r * 1.2, r * .22 + Math.sin(t * 2) * r * .08, r * .3, col, .8, ink);
+    v11iFormGhost(g, r * 1.24, r * .04 + Math.sin(t * 2.4 + 1) * r * .07, r * .26, aux, .7, ink);
+  }
+  for (let i = 0; i < Math.max(2, Math.round(3 * fx)); i++) {
+    const a = t * 1.3 + i * TAU / 3;
+    drawStar(g, Math.cos(a) * r * 1.55, -r * .3 + Math.sin(a) * r * .9, r * .06, r * .025, 4, col, null, 0, a);
+  }
+  g.restore();
+}
+
+function v11iDrawSummonT2(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.lavender, aux = C.purple, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.3, r * .065);
+  v11iFormBase(g, r, cat, t, o, .74);
+  g.save();
+  // 长斗篷
+  if (!o.headOnly && !o.overlayOnly) {
+    v11iFormPoly(g, [[-r * .66, r * .04], [-r * 1.08, r * 1.14], [0, r * 1.32], [r * 1.08, r * 1.14], [r * .66, r * .04]],
+      withAlpha(aux, .34), withAlpha(col, .85), lw);
+    for (let i = 0; i < 5; i++) {
+      const a = i * TAU / 5 + t * .22;
+      drawStar(g, Math.cos(a) * r * .62, r * .66 + Math.sin(a) * r * .24, r * .08, r * .034, 4, col, null, 0, a);
+    }
+  }
+  // 高帽 + 双帽檐
+  const brimY = -r * .8;
+  const apexY = o.headOnly ? -r * 2.3 : -r * 2.6;
+  v11iFormPoly(g, [[-r * .7, brimY], [0, apexY], [r * .7, brimY]], withAlpha(aux, .6), withAlpha(col, .95), lw);
+  g.beginPath(); g.ellipse(0, brimY, r * .9, r * .18, 0, 0, TAU);
+  g.fillStyle = withAlpha(col, .6); g.fill();
+  g.strokeStyle = ink; g.lineWidth = lw * .8; g.stroke();
+  g.beginPath(); g.ellipse(0, brimY - r * .16, r * .66, r * .12, 0, 0, TAU);
+  g.fillStyle = withAlpha(aux, .5); g.fill(); g.strokeStyle = withAlpha(col, .8); g.lineWidth = lw * .6; g.stroke();
+  drawStar(g, 0, apexY, r * .17, r * .07, 6, col, withAlpha(aux, .9), lw, t * .5);
+  drawStar(g, 0, brimY + r * .1, r * .09, r * .04, 5, aux, null, 0, -t * .4);
+  // 幽灵猫群
+  if (o.headOnly) {
+    v11iFormGhost(g, r * 1.02, -r * .16 + Math.sin(t * 2) * r * .05, r * .22, col, .8, ink);
+    v11iFormGhost(g, -r * 1.02, -r * .02 + Math.sin(t * 2.3 + 1) * r * .05, r * .2, aux, .72, ink);
+  } else {
+    v11iFormGhost(g, -r * 1.3, r * .22 + Math.sin(t * 2) * r * .08, r * .32, col, .82, ink);
+    v11iFormGhost(g, r * 1.36, r * .02 + Math.sin(t * 2.4 + 1) * r * .08, r * .29, aux, .78, ink);
+    v11iFormGhost(g, -r * .05, -r * 1.08 + Math.sin(t * 1.8 + 2) * r * .06, r * .23, col, .5, ink);
+  }
+  const stars = Math.max(3, Math.round(5 * fx));
+  for (let i = 0; i < stars; i++) {
+    const a = -t * 1.3 + i * TAU / stars;
+    drawStar(g, Math.cos(a) * r * 1.7, -r * .2 + Math.sin(a) * r * 1.1, r * .07, r * .03, 4, i % 2 ? col : aux, null, 0, a);
+  }
+  g.restore();
+}
+
+/* ---------------- 回血流：圣光天使猫 ---------------- */
+function v11iDrawHealT1(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.blue, aux = C.mint, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.2, r * .06);
+  v11iFormBase(g, r, cat, t, o, .8);
+  g.save();
+  // 光环
+  v11iFormGlow(g, 0, -r * 1.22, r * .42, col, .35);
+  g.beginPath(); g.ellipse(0, -r * 1.24, r * .52, r * .17, 0, 0, TAU);
+  g.strokeStyle = withAlpha(aux, .95); g.lineWidth = lw * 1.3; g.stroke();
+  g.strokeStyle = withAlpha(col, .6); g.lineWidth = lw * .7;
+  g.beginPath(); g.ellipse(0, -r * 1.24, r * .4, r * .12, 0, 0, TAU); g.stroke();
+  // 小羽翼（双层羽片）
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 2; i++) {
+      const span = r * (.72 + i * .26);
+      v11iFormPoly(g, [
+        [sx * r * .44, -r * .14], [sx * span, -r * .72 - i * r * .06],
+        [sx * (span + r * .16), -r * .12], [sx * r * .58, r * .26],
+      ], withAlpha(aux, .26 + i * .08), withAlpha(col, .82), lw);
+      g.strokeStyle = withAlpha(col, .5); g.lineWidth = lw * .55;
+      g.beginPath();
+      g.moveTo(sx * r * .55, r * .02);
+      g.lineTo(sx * span, -r * .36);
+      g.stroke();
+    }
+  }
+  // 治愈光
+  for (let i = 0; i < 4; i++) {
+    const a = -Math.PI * .85 + i * Math.PI * .23;
+    g.strokeStyle = withAlpha(aux, .35); g.lineWidth = lw * .6;
+    g.beginPath();
+    g.moveTo(Math.cos(a) * r * .5, r * .9 + Math.sin(a) * r * .2);
+    g.lineTo(Math.cos(a) * r * 1.45, Math.sin(a) * r * 1.15);
+    g.stroke();
+  }
+  for (let i = 0; i < Math.max(2, Math.round(3 * fx)); i++) {
+    const a = t * .9 + i * TAU / 3;
+    drawStar(g, Math.cos(a) * r * 1.35, -r * .5 + Math.sin(a) * r * .7, r * .08, r * .035, 4, aux, null, 0, a);
+  }
+  g.restore();
+}
+
+function v11iDrawHealT2(g, r, cat, t, o) {
+  o = o || {};
+  const col = C.blue, aux = C.mint, ink = C.ink;
+  const fx = v11iFormFx(o);
+  const lw = Math.max(1.3, r * .065);
+  v11iFormBase(g, r, cat, t, o, .74);
+  g.save();
+  // 治愈之树（放在外侧，不盖脸）
+  if (!o.headOnly && !o.overlayOnly) {
+    g.strokeStyle = withAlpha(aux, .55); g.lineWidth = Math.max(2, r * .12);
+    g.beginPath();
+    g.moveTo(-r * 1.38, r * 1.16);
+    g.quadraticCurveTo(-r * 1.18, r * .2, -r * 1.34, -r * .5);
+    g.stroke();
+    g.lineWidth = Math.max(1.2, r * .07);
+    for (let i = 0; i < 3; i++) {
+      g.beginPath();
+      g.moveTo(-r * 1.3, -r * .2 + i * r * .22);
+      g.lineTo(-r * (1.72 + i * .08), -r * (.62 + i * .2));
+      g.stroke();
+    }
+    for (let i = 0; i < Math.max(3, Math.round(5 * fx)); i++) {
+      const a = i * TAU / 5 + t * .12;
+      g.fillStyle = withAlpha(aux, .22);
+      g.beginPath(); g.arc(-r * 1.5 + Math.cos(a) * r * .18, -r * .86 + Math.sin(a) * r * .2, r * (.16 + i * .02), 0, TAU); g.fill();
+    }
+  }
+  // 双光环
+  v11iFormGlow(g, 0, -r * 1.3, r * .55, col, .4);
+  for (let i = 0; i < 2; i++) {
+    g.beginPath(); g.ellipse(0, -r * 1.3 - i * r * .1, r * (.64 - i * .12), r * (.2 - i * .04), 0, 0, TAU);
+    g.strokeStyle = withAlpha(i ? aux : col, i ? .6 : .95); g.lineWidth = lw * (i ? .7 : 1.35); g.stroke();
+  }
+  // 展开大翼（四层羽片）
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const span = r * (.92 + i * .3);
+      v11iFormPoly(g, [
+        [sx * r * .46, -r * .18], [sx * span, -r * (.9 + i * .08)],
+        [sx * (span + r * .2), -r * (.06 + i * .04)], [sx * r * .6, r * .34],
+      ], withAlpha(aux, .2 + i * .06), withAlpha(col, .8), lw);
+    }
+    for (let i = 0; i < 3; i++) {
+      g.strokeStyle = withAlpha(C.white, .45); g.lineWidth = lw * .55;
+      g.beginPath();
+      g.moveTo(sx * r * .6, r * .02);
+      g.lineTo(sx * r * (1.35 + i * .18), -r * (.3 + i * .16));
+      g.stroke();
+    }
+  }
+  // 治愈光柱
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI * .9 + i * Math.PI * .2;
+    g.strokeStyle = withAlpha(aux, .32); g.lineWidth = lw * .7;
+    g.beginPath();
+    g.moveTo(Math.cos(a) * r * .48, r * .95);
+    g.lineTo(Math.cos(a) * r * 1.65, Math.sin(a) * r * 1.35 - r * .1);
+    g.stroke();
+  }
+  const lights = Math.max(4, Math.round(6 * fx));
+  for (let i = 0; i < lights; i++) {
+    const a = -t * .8 + i * TAU / lights;
+    drawStar(g, Math.cos(a) * r * 1.5, -r * .55 + Math.sin(a) * r * .95, r * .1, r * .045, i % 2 ? 4 : 5, i % 2 ? aux : C.white, null, 0, a);
+  }
+  g.restore();
+}
+
+
 const V11I_HUD_BADGE_RECTS = [];
 const V11I_UPGRADE_BADGE_RECTS = [];
 let V11I_SCHOOL_TOAST_PENDING = null;
@@ -18196,11 +19073,11 @@ drawPlayerSprite = function (g, p, t, opts = {}) {
   if (top) v11iDrawSchoolOrbit(g, p, t, top);
 };
 
-/* 照片 / 内置猫的头部与耳朵也跟着流派颜色共鸣。 */
+/* 照片 / 内置猫的头部、耳朵与流派形态同源：都取 v11hActiveSchoolForm()。 */
 const V11I_LEGACY_ACTIVE_SCHOOL_COLOR = v11hActiveSchoolColor;
 v11hActiveSchoolColor = function () {
-  const top = v11iTopSchool();
-  if (top) return top.def.color;
+  const form = typeof v11hActiveSchoolForm === 'function' ? v11hActiveSchoolForm() : null;
+  if (form && form.color) return form.color;
   return V11I_LEGACY_ACTIVE_SCHOOL_COLOR();
 };
 
@@ -18740,6 +19617,8 @@ function v11jVisibleOnly(arr, pad) {
 }
 
 function v11jDrawWorldCss(t) {
+  // v1.1.3：legacy draw() 不带参数，这里回落到全局 time，避免流派光效拿到 NaN
+  if (!(typeof t === 'number' && isFinite(t))) t = time;
   v11jUpdateCamera();
   v11jEnsureOffscreen();
   const off = V11J_OFF, og = V11J_OFF_CTX, cam = V11J_CAM;
@@ -19006,7 +19885,12 @@ function v11jDrawHudCss(g, t) {
   circle(g, c.x + 21, c.y + c.h / 2, 14, withAlpha(C.gold, .95), C.ink, 2.4);
   drawCatHead(g, c.x + 21, c.y + c.h / 2 + 1, 10.5, player.form || 0, t);
   drawText(g, `LV.${player.level}`, c.x + 40, c.y + 11, 13, C.ink, { weight: 900, line: 0 });
-  const formName = (FORMS[player.form || 0] || FORMS[0]).name;
+  const formName = (() => {
+    const af = typeof v11hActiveSchoolForm === 'function' ? v11hActiveSchoolForm() : null;
+    if (af) return af.name;
+    if (typeof v11hCurrentCat === 'function') return v11hCurrentCat().name;
+    return (FORMS[player.form || 0] || FORMS[0]).name;
+  })();
   drawText(g, formName, c.x + 86, c.y + 11, 10, C.inkSoft, { weight: 800, line: 0 });
   drawText(g, `${Math.max(0, Math.ceil(player.hp))}/${player.maxHp}`,
     c.x + c.w - 9, c.y + 11, 9, withAlpha(C.ink, .72), { align: 'right', weight: 800, line: 0 });
