@@ -10349,7 +10349,7 @@ function v11DrawHomeBackdrop(g, t) {
 function v11PageHeader(g, title, subtitle, backLabel) {
   const compact = v11CompactLayout();
   drawText(g, title, compact ? 32 : 56, compact ? 52 : 50, compact ? 46 : 30, C.cream, { weight: 900, line: 5 });
-  drawText(g, subtitle || '', compact ? 34 : 58, compact ? 94 : 82, compact ? 13 : 11,
+  drawText(g, subtitle || '', compact ? 34 : 58, compact ? 94 : 82, compact ? 14 : 11,
     withAlpha(C.cream, .62), { weight: 700 });
   const back = compact ? { x: 1096, y: 24, w: 160, h: 52 } : { x: 1040, y: 32, w: 184, h: 54 };
   const hov = pointRect(mouse, back);
@@ -10371,7 +10371,7 @@ function v11BigButton(g, r, label, sub, accent, enabled = true) {
   strokeRound(g, r.x, r.y, r.w, r.h, 18, C.ink, hov ? 4 : 3);
   drawPaw(g, r.x + 52, r.y + r.h / 2 - 4, compact ? 24 : 20, withAlpha(C.ink, .55));
   drawText(g, label, r.x + 92, r.y + r.h / 2 - (sub ? 10 : 0), compact ? 34 : 26, C.ink, { weight: 900 });
-  if (sub) drawText(g, sub, r.x + 92, r.y + r.h / 2 + 17, compact ? 13 : 11, withAlpha(C.ink, .66), { weight: 700 });
+  if (sub) drawText(g, sub, r.x + 92, r.y + r.h / 2 + 17, compact ? 14 : 11, withAlpha(C.ink, .66), { weight: 700 });
   g.restore();
 }
 
@@ -10502,22 +10502,23 @@ function v11DrawModeSelectScreen(g, t) {
   const back = v11PageHeader(g, '选择模式', '五个模式各存各的进度 · 切换不串档', '返回主页');
   V11_MODE_RECTS.push({ id: 'back', ...back });
 
+  const compact = v11CompactLayout();
   // 当前档案摘要
-  fillRound(g, 56, 104, 1168, 46, 13, withAlpha('#170e24', .8));
-  strokeRound(g, 56, 104, 1168, 46, 13, withAlpha(C.mint, .25), 1.6);
-  drawText(g, v11ProfileLine(), 76, 127, 12, profile ? C.cream : C.coral, { weight: 800 });
+  fillRound(g, compact ? 24 : 56, 104, compact ? 1232 : 1168, 46, 13, withAlpha('#170e24', .8));
+  strokeRound(g, compact ? 24 : 56, 104, compact ? 1232 : 1168, 46, 13, withAlpha(C.mint, .25), 1.6);
+  drawText(g, v11ProfileLine(), compact ? 44 : 76, 127, compact ? 14 : 12, profile ? C.cream : C.coral, { weight: 800 });
   if (!profile) {
-    drawText(g, '点任意模式会自动跳到存档页', 1204, 127, 11, withAlpha(C.coral, .85), { align: 'right', weight: 700 });
+    drawText(g, '点任意模式会自动跳到存档页', 1204, 127, compact ? 14 : 11, withAlpha(C.coral, .85), { align: 'right', weight: 700 });
   }
 
   const ids = MODE_LIST.slice();
-  const cardH = 92, gap = 12, top = 166;
+  const cardH = 92, gap = compact ? 8 : 12, top = 166;
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
     const m = MODES[id];
     if (!m) continue;
     const y = top + i * (cardH + gap);
-    const r = { x: 56, y, w: 1168, h: cardH };
+    const r = { x: compact ? 24 : 56, y, w: compact ? 1232 : 1168, h: cardH };
     const accent = MODE_ACCENT[id] || m.color || C.gold;
     const locked = (id === 'infinite') && (!profile || !(profile.modes.infinite.unlocked || profile.stats.storyCleared));
     const hov = !locked && pointRect(mouse, r);
@@ -10529,25 +10530,25 @@ function v11DrawModeSelectScreen(g, t) {
     fillRound(g, r.x, r.y, 8, r.h, 4, accent);
     circle(g, r.x + 58, r.y + r.h / 2, 27, withAlpha(accent, .18), withAlpha(accent, .6), 2);
     drawHomeModeIcon(g, id, r.x + 58, r.y + r.h / 2, 18, accent);
-    drawText(g, m.name, r.x + 100, r.y + 32, 24, C.cream, { weight: 900 });
-    drawText(g, m.label || '', r.x + 100, r.y + 58, 11, withAlpha(C.cream, .62), { weight: 700 });
-    drawText(g, v11ModeDifficulty(id), r.x + 100, r.y + 76, 10, withAlpha(C.cream, .5), { weight: 600 });
+    drawText(g, m.name, r.x + 100, r.y + 32, compact ? 28 : 24, C.cream, { weight: 900 });
+    drawText(g, m.label || '', r.x + 100, r.y + 58, compact ? 14 : 11, withAlpha(C.cream, .62), { weight: 700 });
+    drawText(g, v11ModeDifficulty(id), r.x + 100, r.y + 76, compact ? 14 : 10, withAlpha(C.cream, .5), { weight: 600 });
 
     const mp = profile ? profile.modes[id] : null;
-    drawText(g, mp ? modeProgressLabel(id, mp) : '未选档案', r.x + r.w - 210, r.y + 34, 16,
+    drawText(g, mp ? modeProgressLabel(id, mp) : '未选档案', r.x + r.w - 210, r.y + 34, compact ? 18 : 16,
       mp ? accent : withAlpha(C.cream, .45), { align: 'right', weight: 900 });
     drawText(g, mp ? `Lv.${mp.level || 1} · ${FORMS[clamp(mp.form || 0, 0, FORMS.length - 1)].name}` : '存档后开始',
-      r.x + r.w - 210, r.y + 60, 10, withAlpha(C.cream, .55), { align: 'right', weight: 700 });
+      r.x + r.w - 210, r.y + 60, compact ? 14 : 10, withAlpha(C.cream, .55), { align: 'right', weight: 700 });
     const action = locked ? '未解锁' : (id === 'infinite' ? '开打 →' : (id === 'story' ? '选关 →' : '开打 →'));
-    drawText(g, action, r.x + r.w - 34, r.y + r.h / 2, 16, locked ? withAlpha(C.cream, .4) : accent, { align: 'right', weight: 900 });
+    drawText(g, action, r.x + r.w - 34, r.y + r.h / 2, compact ? 18 : 16, locked ? withAlpha(C.cream, .4) : accent, { align: 'right', weight: 900 });
     if (locked) {
-      drawText(g, '通关剧情模式后开放', r.x + r.w - 34, r.y + r.h / 2 + 22, 10, withAlpha(C.cream, .45), { align: 'right', weight: 700 });
+      drawText(g, '通关剧情模式后开放', r.x + r.w - 34, r.y + r.h / 2 + 22, compact ? 14 : 10, withAlpha(C.cream, .45), { align: 'right', weight: 700 });
     }
     g.restore();
     if (!locked) V11_MODE_RECTS.push({ id, ...r });
   }
   drawText(g, '简单 / 困难 / 地狱：无剧情，怪物倍率 ×1.0 / ×1.8 / ×3.0 · 剧情：×0.7 + 章节剧情',
-    W / 2, 690, 10, withAlpha(C.cream, .45), { align: 'center', weight: 700 });
+    W / 2, compact ? 688 : 690, compact ? 14 : 10, withAlpha(C.cream, .45), { align: 'center', weight: 700 });
   if (confirmAction) drawConfirmDialog(g, t);
   drawBannerAndToast(g, t);
 }
@@ -10606,7 +10607,7 @@ function v11DrawSaveSelectScreen(g, t) {
            `无限 ${prof.modes.infinite.unlocked || prof.stats.storyCleared ? modeProgressLabel('infinite', prof.modes.infinite) : '未解锁'} · Lv.${prof.modes.easy.level || 1}`,
            formatSaveTime(prof.updatedAt)];
       for (let k = 0; k < lines.length; k++) {
-        drawText(g, lines[k], x + 18, y + (compact ? 72 + k * 24 : 60 + k * 22), compact ? 13 : 10,
+        drawText(g, lines[k], x + 18, y + (compact ? 72 + k * 24 : 60 + k * 22), compact ? 14 : 10,
           withAlpha(C.cream, k === lines.length - 1 ? .45 : .74), { weight: 700 });
       }
       if (!compact) {
@@ -10620,7 +10621,7 @@ function v11DrawSaveSelectScreen(g, t) {
     V11_SAVE_RECTS.push({ id: 'slot', slot: i, x, y, w: cardW, h: cardH });
   }
   drawText(g, '一次“保存”= 把该档案五个模式的数据整体写入槽位 · 死亡仍按肉鸽规则重开本关',
-    W / 2, compact ? 690 : 686, compact ? 13 : 10, withAlpha(C.cream, .48), { align: 'center', weight: 700 });
+    W / 2, compact ? 688 : 686, compact ? 14 : 10, withAlpha(C.cream, .48), { align: 'center', weight: 700 });
 
   if (slotMenu) drawSlotMenu(g, t);
   if (confirmAction) drawConfirmDialog(g, t);
@@ -10698,8 +10699,8 @@ function v11DrawChangelogScreen(g, t) {
   // —— 尺寸：触屏 / 窄屏按 compact 放大字号与行距，避免错位裁切 ——
   const compact = v11CompactLayout();
   const k = compact ? 1.3 : 1;
-  const vSize = Math.round(17 * k), vDateSize = Math.round(11 * k);
-  const gSize = Math.round(13 * k), iSize = Math.max(compact ? 13 : 11, Math.round(11 * k));
+  const vSize = Math.round(17 * k), vDateSize = Math.max(compact ? 14 : 11, Math.round(11 * k));
+  const gSize = Math.round(13 * k), iSize = Math.max(compact ? 14 : 11, Math.round(11 * k));
   const vH = Math.round(48 * k);                                   // 版本头高
   const gH = Math.round(30 * k);                                   // 分组头高
   const iLH = Math.round(20 * k);                                  // 条目行高（字号 + 行距）
@@ -10778,7 +10779,7 @@ function v11DrawChangelogScreen(g, t) {
       g.strokeStyle = withAlpha(row.color, .28); g.lineWidth = 1.5;
       g.beginPath(); g.moveTo(lx, yy + row.h / 2); g.lineTo(textX + textW + 8, yy + row.h / 2); g.stroke();
     } else if (row.kind === 'hint') {
-      drawText(g, row.text, textX + 6, yy + row.h / 2, Math.round(10 * k), withAlpha(C.cream, .5), { weight: 600 });
+      drawText(g, row.text, textX + 6, yy + row.h / 2, Math.max(compact ? 14 : 10, Math.round(10 * k)), withAlpha(C.cream, .5), { weight: 600 });
     } else {
       for (let li = 0; li < row.lines.length; li++) {
         const ly = yy + iLH * li + iLH / 2;
@@ -10821,7 +10822,7 @@ function v11DrawChangelogScreen(g, t) {
     })),
   };
 
-  drawText(g, '滚轮 / ↑↓ 翻页 · Esc 返回主页', W / 2, 692, 10, withAlpha(C.cream, .42), { align: 'center', weight: 700 });
+  drawText(g, '滚轮 / ↑↓ 翻页 · Esc 返回主页', W / 2, compact ? 688 : 692, compact ? 14 : 10, withAlpha(C.cream, .42), { align: 'center', weight: 700 });
   drawBannerAndToast(g, t);
 }
 
@@ -11046,9 +11047,14 @@ function v11TouchScaleSlider(g, x, y, w, key, accent) {
 
 /* v1.1.3 补充项：手机横屏设置面板 · 左设置项 + 右手机操控 + 底部按钮行。
    热区全部 ≥44，标题 46 / 正文 18+ / 小注 13。桌面布局不进入此函数。 */
-function v11bCompactSettingRow(g, x, labelY, title, sub) {
+function v11bCompactSettingRow(g, x, labelY, title, sub, maxW) {
   drawText(g, title, x, labelY, 22, C.ink, { weight: 900 });
-  drawText(g, sub, x, labelY + 24, 13, withAlpha(C.inkSoft, .72), { weight: 700 });
+  const subSize = 14;
+  const font = `700 ${subSize}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif`;
+  const lines = wrapText(g, sub, maxW || 999, font).slice(0, 2);
+  for (let i = 0; i < lines.length; i++) {
+    drawText(g, lines[i], x, labelY + 24 + i * 18, subSize, withAlpha(C.inkSoft, .72), { weight: 700 });
+  }
 }
 
 function v11bCompactVolumeSlider(g, x, y, w, value, accent, type) {
@@ -11073,7 +11079,7 @@ function v11DrawSettingsCompact(g, t) {
 
   drawText(g, '调一调，喵', W / 2, py + 48, 46, C.ink, { align: 'center', weight: 900 });
   drawText(g, '画面 / 全屏 / 帧数 / 音量 / 手机操控 · 本机自动记住',
-    W / 2, py + 86, 13, withAlpha(C.inkSoft, .72), { align: 'center', weight: 700 });
+    W / 2, py + 86, 14, withAlpha(C.inkSoft, .72), { align: 'center', weight: 700 });
   g.strokeStyle = withAlpha(C.ink, .16); g.lineWidth = 2;
   g.beginPath(); g.moveTo(px + 40, py + 104); g.lineTo(px + pw - 40, py + 104); g.stroke();
 
@@ -11081,16 +11087,21 @@ function v11DrawSettingsCompact(g, t) {
   V11_SETTINGS_HOVER = null;
 
   const labelX = px + 40;
-  const ctlX = px + 300;
-  const ctlW = 310;
-  const rightX = px + 730;
+  const ctlX = px + 280;
+  const ctlW = 320;
+  const noteW = ctlX - labelX - 16;
+  const rightX = px + 696;
+
+  // 两栏平衡：左设置项 / 右手机操控，中间竖向分隔线落在 x=704。
+  g.strokeStyle = withAlpha(C.ink, .14); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(px + 680, py + 118); g.lineTo(px + 680, py + 468); g.stroke();
 
   // 左列：画面大小
-  v11bCompactSettingRow(g, labelX, py + 140, '画面大小', '等比缩放 · 不裁切不拉伸');
+  v11bCompactSettingRow(g, labelX, py + 124, '画面大小', '等比缩放 · 不裁切不拉伸', noteW);
   const scales = [.75, 1, 1.25, 1.5];
   for (let i = 0; i < scales.length; i++) {
     const v = scales[i];
-    const br = { x: ctlX + i * 96, y: py + 126, w: 88, h: 46 };
+    const br = { x: ctlX + i * 82, y: py + 114, w: 74, h: 48 };
     const active = settings.scale === v;
     const hov = pointRect(mouse, br);
     fillRound(g, br.x, br.y, br.w, br.h, 12, active ? C.gold : (hov ? '#fff8e9' : '#f2dfbd'));
@@ -11098,15 +11109,13 @@ function v11DrawSettingsCompact(g, t) {
     drawText(g, `${v}x`, br.x + br.w / 2, br.y + br.h / 2, 18, C.ink, { align: 'center', weight: 900 });
     settingsRects.push({ type: 'scale', value: v, ...br });
   }
-  g.strokeStyle = withAlpha(C.ink, .14); g.lineWidth = 2;
-  g.beginPath(); g.moveTo(labelX, py + 190); g.lineTo(px + 660, py + 190); g.stroke();
 
   // 左列：帧数上限
-  v11bCompactSettingRow(g, labelX, py + 214, '帧数上限', '默认 60 · 任意帧率下升级界面都稳定');
+  v11bCompactSettingRow(g, labelX, py + 192, '帧数上限', '默认 60 · 升级界面稳定', noteW);
   const fpsVals = [[30, '30'], [60, '60'], [120, '120'], [0, '无限制']];
   for (let i = 0; i < fpsVals.length; i++) {
     const [v, label] = fpsVals[i];
-    const br = { x: ctlX + i * 96, y: py + 200, w: 88, h: 46 };
+    const br = { x: ctlX + i * 82, y: py + 182, w: 74, h: 48 };
     const active = settings.fps === v;
     const hov = pointRect(mouse, br);
     fillRound(g, br.x, br.y, br.w, br.h, 12, active ? C.mint : (hov ? '#f7fff8' : '#f2dfbd'));
@@ -11114,13 +11123,11 @@ function v11DrawSettingsCompact(g, t) {
     drawText(g, label, br.x + br.w / 2, br.y + br.h / 2, 18, C.ink, { align: 'center', weight: 900 });
     settingsRects.push({ type: 'fps', value: v, ...br });
   }
-  g.strokeStyle = withAlpha(C.ink, .14); g.lineWidth = 2;
-  g.beginPath(); g.moveTo(labelX, py + 264); g.lineTo(px + 660, py + 264); g.stroke();
 
   // 左列：全屏
   const fsOn = v11IsFullscreen();
-  v11bCompactSettingRow(g, labelX, py + 288, '全屏', 'Fullscreen API · Esc 退出');
-  const fsRect = { x: ctlX, y: py + 274, w: 178, h: 46 };
+  v11bCompactSettingRow(g, labelX, py + 260, '全屏', 'Fullscreen API · Esc 退出', noteW);
+  const fsRect = { x: ctlX, y: py + 250, w: 200, h: 48 };
   const fsHover = pointRect(mouse, fsRect);
   fillRound(g, fsRect.x, fsRect.y, fsRect.w, fsRect.h, 12, fsOn ? C.coral : (fsHover ? '#fff8e9' : '#f2dfbd'));
   strokeRound(g, fsRect.x, fsRect.y, fsRect.w, fsRect.h, 12, C.ink, fsOn ? 3 : 1.8);
@@ -11128,39 +11135,37 @@ function v11DrawSettingsCompact(g, t) {
     fsOn ? C.cream : C.ink, { align: 'center', weight: 900 });
   settingsRects.push({ type: 'fullscreen', ...fsRect });
   drawText(g, '当前：' + (V11_FS.pseudo ? '伪全屏' : (V11_FS.electron ? '窗口全屏' : '浏览器全屏')),
-    ctlX + 196, py + 297, 13, withAlpha(C.inkSoft, .62), { weight: 700 });
-  g.strokeStyle = withAlpha(C.ink, .14); g.lineWidth = 2;
-  g.beginPath(); g.moveTo(labelX, py + 350); g.lineTo(px + 660, py + 350); g.stroke();
+    ctlX + 216, py + 274, 14, withAlpha(C.inkSoft, .62), { weight: 700 });
 
   // 左列：主音量
-  v11bCompactSettingRow(g, labelX, py + 374, '主音量', '默认 80% · HUD 与设置共用同一数值');
-  v11bCompactVolumeSlider(g, ctlX, py + 356, ctlW, settings.masterVolume, C.coral, 'master');
-  const muteRect = { x: px + 668, y: py + 356, w: 60, h: 52 };
+  v11bCompactSettingRow(g, labelX, py + 328, '主音量', '默认 80% · 与 HUD 共用', noteW);
+  v11bCompactVolumeSlider(g, ctlX, py + 318, ctlW, settings.masterVolume, C.coral, 'master');
+  const muteRect = { x: px + 616, y: py + 318, w: 64, h: 52 };
   const mHover = pointRect(mouse, muteRect);
   fillRound(g, muteRect.x, muteRect.y, muteRect.w, muteRect.h, 11, settings.muted ? withAlpha(C.coral, .18) : '#f2dfbd');
   strokeRound(g, muteRect.x, muteRect.y, muteRect.w, muteRect.h, 11, C.ink, mHover ? 2.6 : 1.6);
   drawSpeakerIcon(g, muteRect.x + 14, muteRect.y + 26, 14, settings.muted, C.ink);
-  drawText(g, '静音', muteRect.x + 28, muteRect.y + 26, 13,
+  drawText(g, '静音', muteRect.x + 30, muteRect.y + 26, 14,
     settings.muted ? C.coralDeep : C.inkSoft, { weight: 800 });
   settingsRects.push({ type: 'mute', ...muteRect });
 
   // 左列：音效音量
-  v11bCompactSettingRow(g, labelX, py + 448, '音效音量', '喵嗷 / 罐头 / 进化音 · 已降低刺耳高频');
-  v11bCompactVolumeSlider(g, ctlX, py + 430, ctlW, settings.sfxVolume, C.mint, 'sfx');
-  drawSpeakerIcon(g, px + 688, py + 456, 22, false, C.inkSoft);
+  v11bCompactSettingRow(g, labelX, py + 396, '音效音量', '喵嗷 / 罐头 / 进化音', noteW);
+  v11bCompactVolumeSlider(g, ctlX, py + 386, ctlW, settings.sfxVolume, C.mint, 'sfx');
+  drawSpeakerIcon(g, muteRect.x + 18, py + 430, 22, false, C.inkSoft);
 
   // 右列：手机操控
   if (IS_TOUCH_DEVICE) {
-    drawText(g, '手机操控', rightX, py + 136, 22, C.ink, { weight: 900 });
-    drawText(g, '仅触屏设备显示 · 大小 / 位置即改即存', rightX, py + 160, 13, withAlpha(C.inkSoft, .72), { weight: 700 });
-    drawText(g, '左摇杆大小', rightX, py + 196, 18, C.ink, { weight: 900 });
-    v11TouchScaleSlider(g, rightX, py + 210, 230, 'joyScale', C.coral);
-    drawText(g, '右按钮大小', rightX, py + 272, 18, C.ink, { weight: 900 });
-    v11TouchScaleSlider(g, rightX, py + 286, 230, 'rightScale', C.mint);
+    drawText(g, '手机操控', rightX, py + 124, 22, C.ink, { weight: 900 });
+    drawText(g, '仅触屏设备显示 · 大小 / 位置即改即存', rightX, py + 148, 14, withAlpha(C.inkSoft, .72), { weight: 700 });
+    drawText(g, '左摇杆大小', rightX, py + 190, 18, C.ink, { weight: 900 });
+    v11TouchScaleSlider(g, rightX, py + 204, 260, 'joyScale', C.coral);
+    drawText(g, '右按钮大小', rightX, py + 258, 18, C.ink, { weight: 900 });
+    v11TouchScaleSlider(g, rightX, py + 272, 260, 'rightScale', C.mint);
     const posBtns = [
-      { type: 'touchEdit', value: 'joy', label: '左摇杆位置', x: rightX, y: py + 344, w: 218, h: 48 },
-      { type: 'touchEdit', value: 'right', label: '右按钮位置', x: rightX + 232, y: py + 344, w: 218, h: 48 },
-      { type: 'touchReset', label: '重置位置', x: rightX, y: py + 402, w: 218, h: 48 },
+      { type: 'touchEdit', value: 'joy', label: '左摇杆位置', x: rightX, y: py + 326, w: 250, h: 50 },
+      { type: 'touchEdit', value: 'right', label: '右按钮位置', x: rightX + 262, y: py + 326, w: 250, h: 50 },
+      { type: 'touchReset', label: '重置位置', x: rightX, y: py + 384, w: 512, h: 50 },
     ];
     for (const b of posBtns) {
       const hov = pointRect(mouse, b);
@@ -11169,31 +11174,39 @@ function v11DrawSettingsCompact(g, t) {
       drawText(g, b.label, b.x + b.w / 2, b.y + b.h / 2, 18, C.ink, { align: 'center', weight: 900 });
       settingsRects.push({ type: b.type, value: b.value, x: b.x, y: b.y, w: b.w, h: b.h });
     }
-    drawText(g, '拖动时半屏内定位 · 不会压到 HUD', rightX, py + 482, 13, withAlpha(C.inkSoft, .6), { weight: 700 });
+    drawText(g, '拖动时半屏内定位 · 不会压到 HUD', rightX, py + 468, 14, withAlpha(C.inkSoft, .6), { weight: 700 });
   }
 
   // 提示行（仅在有内容时占位，避免与底部按钮重叠）
   if (settingsNotice) {
     const fresh = time - settingsNotice.at;
     if (fresh < 2.6) {
-      drawText(g, settingsNotice.text, W / 2, py + 508, 13,
+      drawText(g, settingsNotice.text, W / 2, py + 492, 14,
         settingsNotice.ok ? C.mintDeep : C.coralDeep, { align: 'center', weight: 900 });
     } else settingsNotice = null;
   } else if (volumePill) {
     drawText(g, `当前主音量 ${Math.round(settings.masterVolume * 100)}%${settings.muted ? '（静音中）' : ''}`,
-      W / 2, py + 508, 13, settings.muted ? C.coralDeep : C.mintDeep, { align: 'center', weight: 800 });
+      W / 2, py + 492, 14, settings.muted ? C.coralDeep : C.mintDeep, { align: 'center', weight: 800 });
   }
 
-  // 底部按钮行：四个等距入口，高度 56（热区 ≥44）
-  const btnY = py + 536, btnH = 56;
-  const buttons = [
-    { type: 'bestiary', label: '模型图鉴', x: px + 40, w: 240, accent: '#eed7ae' },
-    { type: 'changelog', label: '更新日志', x: px + 304, w: 240, accent: '#d9c8ff' },
-    { type: 'save', label: '保存设置', x: px + 568, w: 300, accent: C.gold },
-    { type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : (settingsReturn === 'playing' ? '返回游戏' : '返回主页'), x: px + 892, w: 300, accent: C.mint },
+  // 底部按钮行：上行三入口 / 下行返回（游戏内多一枚「返回模式选择」）。
+  const inRun = v11SettingsInRun();
+  const topY = py + 506, topH = 52;
+  const topButtons = [
+    { type: 'bestiary', label: '模型图鉴', x: px + 40, w: 368, accent: '#eed7ae' },
+    { type: 'changelog', label: '更新日志', x: px + 432, w: 368, accent: '#d9c8ff' },
+    { type: 'save', label: '保存设置', x: px + 824, w: 368, accent: C.gold },
   ];
-  for (const b of buttons) {
-    const r = { x: b.x, y: btnY, w: b.w, h: btnH };
+  const bottomY = py + 566, bottomH = 52;
+  const bottomButtons = [];
+  if (inRun) {
+    bottomButtons.push({ type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : '返回游戏', x: px + 40, w: 568, accent: C.mint });
+    bottomButtons.push({ type: 'switchmode', label: '返回模式选择', x: px + 632, w: 568, accent: C.coral });
+  } else {
+    bottomButtons.push({ type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : (settingsReturn === 'playing' ? '返回游戏' : '返回主页'), x: px + 40, w: 1152, accent: C.mint });
+  }
+  for (const b of topButtons.concat(bottomButtons)) {
+    const r = { x: b.x, y: b.type === 'back' || b.type === 'switchmode' ? bottomY : topY, w: b.w, h: b.type === 'back' || b.type === 'switchmode' ? bottomH : topH };
     const hov = pointRect(mouse, r);
     fillRound(g, r.x + 4, r.y + 5, r.w, r.h, 14, withAlpha(C.ink, .24));
     fillRound(g, r.x, r.y, r.w, r.h, 14, hov ? C.cream : b.accent);
@@ -11203,9 +11216,9 @@ function v11DrawSettingsCompact(g, t) {
   }
 
   drawText(g, '版本 ' + v11Version() + ' · 与更新日志“当前版本”一致',
-    W / 2, py + 632, 13, withAlpha(C.inkSoft, .76), { align: 'center', weight: 800 });
+    W / 2, py + 632, 14, withAlpha(C.inkSoft, .76), { align: 'center', weight: 800 });
   drawText(g, '本游戏必须联网 · 技能 / 敌人 / 剧情 / 数值在启动时从 config/*.json 拉取',
-    W / 2, py + 656, 13, withAlpha(C.inkSoft, .58), { align: 'center', weight: 600 });
+    W / 2, py + 656, 14, withAlpha(C.inkSoft, .58), { align: 'center', weight: 600 });
 }
 
 function v11DrawSettingsScreen(g, t) {
@@ -11323,28 +11336,37 @@ function v11DrawSettingsScreen(g, t) {
   }
 
   drawText(g, '快捷键：[ 减音量 · ] 加音量 · M 静音 · F 全屏 · Esc 暂停 / 返回',
-    W / 2, py + 494, 10, withAlpha(C.inkSoft, .64), { align: 'center', weight: 700 });
+    W / 2, py + 480, 10, withAlpha(C.inkSoft, .64), { align: 'center', weight: 700 });
   if (settingsNotice) {
     const fresh = time - settingsNotice.at;
     if (fresh < 2.6) {
-      drawText(g, settingsNotice.text, W / 2, py + 518, 12,
+      drawText(g, settingsNotice.text, W / 2, py + 496, 12,
         settingsNotice.ok ? C.mintDeep : C.coralDeep, { align: 'center', weight: 900 });
     } else settingsNotice = null;
   } else if (volumePill) {
     drawText(g, `当前主音量 ${Math.round(settings.masterVolume * 100)}%${settings.muted ? '（静音中）' : ''}`,
-      W / 2, py + 518, 10, settings.muted ? C.coralDeep : C.mintDeep, { align: 'center', weight: 800 });
+      W / 2, py + 496, 10, settings.muted ? C.coralDeep : C.mintDeep, { align: 'center', weight: 800 });
   }
 
-  // 底部入口：图鉴 / 更新日志 / 保存设置 / 返回
-  const btnY = py + 540, btnH = 54;
-  const buttons = [
-    { type: 'bestiary', label: '模型图鉴', x: px + 44, w: 200, accent: '#eed7ae' },
-    { type: 'changelog', label: '更新日志', x: px + 258, w: 200, accent: '#d9c8ff' },
-    { type: 'save', label: '保存设置', x: px + 472, w: 240, accent: C.gold },
-    { type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : (settingsReturn === 'playing' ? '返回游戏' : '返回主页'), x: px + 726, w: 290, accent: C.mint },
+  // 底部入口：上行 图鉴 / 更新日志 / 保存设置，下行 返回（游戏内多「返回模式选择」）。
+  const inRun = v11SettingsInRun();
+  const topY = py + 510, btnH = 48;
+  const topButtons = [
+    { type: 'bestiary', label: '模型图鉴', x: px + 44, w: 308, accent: '#eed7ae' },
+    { type: 'changelog', label: '更新日志', x: px + 376, w: 308, accent: '#d9c8ff' },
+    { type: 'save', label: '保存设置', x: px + 708, w: 308, accent: C.gold },
   ];
-  for (const b of buttons) {
-    const r = { x: b.x, y: btnY, w: b.w, h: btnH };
+  const bottomY = py + 566;
+  const bottomButtons = [];
+  if (inRun) {
+    bottomButtons.push({ type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : '返回游戏', x: px + 44, w: 474, accent: C.mint });
+    bottomButtons.push({ type: 'switchmode', label: '返回模式选择', x: px + 542, w: 474, accent: C.coral });
+  } else {
+    bottomButtons.push({ type: 'back', label: settingsReturn === 'paused' ? '返回暂停' : (settingsReturn === 'playing' ? '返回游戏' : '返回主页'), x: px + 44, w: 972, accent: C.mint });
+  }
+  for (const b of topButtons.concat(bottomButtons)) {
+    const isBottom = b.type === 'back' || b.type === 'switchmode';
+    const r = { x: b.x, y: isBottom ? bottomY : topY, w: b.w, h: btnH };
     const hov = pointRect(mouse, r);
     fillRound(g, r.x + 4, r.y + 5, r.w, r.h, 14, withAlpha(C.ink, .24));
     fillRound(g, r.x, r.y, r.w, r.h, 14, hov ? C.cream : b.accent);
@@ -11353,9 +11375,9 @@ function v11DrawSettingsScreen(g, t) {
     settingsRects.push({ type: b.type, ...r });
   }
 
-  drawText(g, '版本 ' + v11Version() + ' · 与更新日志“当前版本”一致', W / 2, py + 616, 11, withAlpha(C.inkSoft, .76), { align: 'center', weight: 800 });
+  drawText(g, '版本 ' + v11Version() + ' · 与更新日志“当前版本”一致', W / 2, py + 630, 11, withAlpha(C.inkSoft, .76), { align: 'center', weight: 800 });
   drawText(g, '本游戏必须联网 · 技能 / 敌人 / 剧情 / 数值在启动时从 config/*.json 拉取',
-    W / 2, py + 637, 10, withAlpha(C.inkSoft, .58), { align: 'center', weight: 600 });
+    W / 2, py + 650, 10, withAlpha(C.inkSoft, .58), { align: 'center', weight: 600 });
 }
 
 const V11_LEGACY_DRAW_SETTINGS = drawSettingsScreen;
@@ -11393,7 +11415,7 @@ function v11DrawBestiaryCompact(g, t) {
   const mobs = Object.keys(ENEMY_DEFS).filter(k => !ENEMY_DEFS[k].boss).length;
   const bosses = Object.keys(ENEMY_DEFS).filter(k => ENEMY_DEFS[k].boss).length;
   drawText(g, `${mobs} 种小怪 · ${bosses} 个章节 Boss · 全部程序化绘制 · 角色形态见顶栏分页`,
-    34, 94, 13, withAlpha(C.cream, .65), { weight: 700 });
+    34, 94, 14, withAlpha(C.cream, .65), { weight: 700 });
 
   const totalPages = Math.max(1, Math.ceil(cells.length / V11_BESTIARY_PAGE_SIZE));
   V11_BESTIARY_PAGE = clamp(V11_BESTIARY_PAGE, 0, totalPages - 1);
@@ -11406,8 +11428,8 @@ function v11DrawBestiaryCompact(g, t) {
   drawText(g, '← 返回', back.x + back.w / 2, back.y + back.h / 2, 20, C.ink, { align: 'center', weight: 900 });
   bestiaryRects.push({ id: 'back', ...back });
 
-  const prev = { x: 852, y: 28, w: 64, h: 44 };
-  const next = { x: 1012, y: 28, w: 64, h: 44 };
+  const prev = { x: 852, y: 26, w: 64, h: 48 };
+  const next = { x: 1012, y: 26, w: 64, h: 48 };
   for (const [r, label, disabled, id] of [[prev, '‹', page <= 0, 'prev'], [next, '›', page >= totalPages - 1, 'next']]) {
     g.save();
     if (disabled) g.globalAlpha = .4;
@@ -11418,7 +11440,7 @@ function v11DrawBestiaryCompact(g, t) {
     g.restore();
     if (!disabled) bestiaryRects.push({ id, ...r });
   }
-  drawText(g, `${page + 1} / ${totalPages} 页`, 964, 50, 13, C.gold, { align: 'center', weight: 900 });
+  drawText(g, `${page + 1} / ${totalPages} 页`, 964, 50, 14, C.gold, { align: 'center', weight: 900 });
 
   const cols = 4;
   const cardW = 296, cardH = 154, gapX = 16, gapY = 12;
@@ -11435,8 +11457,8 @@ function v11DrawBestiaryCompact(g, t) {
     fillRound(g, x, y, cardW, cardH, 14, withAlpha('#251733', .95));
     strokeRound(g, x, y, cardW, cardH, 14, withAlpha(accent, .55), 1.7);
     fillRound(g, x, y, cardW, 5, 2.5, accent);
-    drawText(g, cell.chapter, x + 12, y + 22, 13, withAlpha(C.cream, .6), { weight: 700 });
-    drawText(g, cell.tag, x + cardW - 12, y + 22, 13, accent, { align: 'right', weight: 900 });
+    drawText(g, cell.chapter, x + 12, y + 22, 14, withAlpha(C.cream, .6), { weight: 700 });
+    drawText(g, cell.tag, x + cardW - 12, y + 22, 14, accent, { align: 'right', weight: 900 });
     g.save();
     const cx = x + cardW / 2, cy = y + 76;
     roundRectPath(g, x + 8, y + 30, cardW - 16, 90, 10); g.clip();
@@ -11459,7 +11481,7 @@ function v11DrawBestiaryCompact(g, t) {
   }
 
   drawText(g, '剪影优先：每一只都有独立轮廓与行为 · 非换色复用',
-    W / 2, 692, 13, withAlpha(C.cream, .5), { align: 'center', weight: 700 });
+    W / 2, 692, 14, withAlpha(C.cream, .5), { align: 'center', weight: 700 });
 }
 
 function v11DrawBestiaryScreen(g, t) {
@@ -11553,7 +11575,7 @@ function v11DrawStorySelectScreen(g, t) {
   const cleared = mp ? (mp.clearedStage || 0) : 0;
   const total = STAGE_CFG.storyStageCount || 30;
   drawText(g, `${total} 关全部可见 · 顺序解锁 · 每 3 关一次存档提示 · 只有本模式有剧情`,
-    compact ? 34 : 54, compact ? 94 : 78, compact ? 13 : 12, withAlpha(C.cream, .66), { weight: 700 });
+    compact ? 34 : 54, compact ? 94 : 78, compact ? 14 : 12, withAlpha(C.cream, .66), { weight: 700 });
   drawText(g, `已通关 ${cleared} / ${total}`, compact ? 1056 : 1000, compact ? 50 : 48,
     compact ? 18 : 15, C.gold, { align: 'right', weight: 900 });
 
@@ -11566,7 +11588,7 @@ function v11DrawStorySelectScreen(g, t) {
 
   const unlocked = storyUnlockedStage();
   const cols = 6;
-  const cardW = compact ? 195 : 188, cardH = compact ? 106 : 100;
+  const cardW = compact ? 195 : 188, cardH = compact ? 100 : 100;
   const gapX = compact ? 12 : 14, gapY = compact ? 8 : 8;
   const totalW = cols * cardW + (cols - 1) * gapX;
   const startX = compact ? 24 : (W - totalW) / 2, startY = compact ? 124 : 104;
@@ -11589,30 +11611,30 @@ function v11DrawStorySelectScreen(g, t) {
     fillRound(g, x, y, cardW, 5, 2.5, accent);
     drawText(g, stageLabel(stage, 'story'), x + 12, y + (compact ? 34 : 32), compact ? 28 : 24,
       open ? C.cream : withAlpha(C.cream, .35), { weight: 900 });
-    drawText(g, theme.name, x + 12, y + (compact ? 58 : 54), compact ? 13 : 9,
+    drawText(g, theme.name, x + 12, y + (compact ? 58 : 54), compact ? 14 : 9,
       withAlpha(C.cream, open ? .68 : .3), { weight: 700 });
     if (boss) {
       fillRound(g, x + cardW - (compact ? 68 : 58), y + (compact ? 12 : 14), compact ? 56 : 46, compact ? 24 : 20, 10,
         withAlpha(C.coral, open ? .8 : .25));
-      drawText(g, 'BOSS', x + cardW - (compact ? 40 : 35), y + (compact ? 24 : 24), compact ? 13 : 10,
+      drawText(g, 'BOSS', x + cardW - (compact ? 40 : 35), y + (compact ? 24 : 24), compact ? 14 : 10,
         open ? C.cream : withAlpha(C.cream, .4), { align: 'center', weight: 900 });
     }
     if (done) {
-      drawText(g, '✓ 已通关', x + 12, y + (compact ? 86 : 80), compact ? 13 : 10, C.mint, { weight: 900 });
+      drawText(g, '✓ 已通关', x + 12, y + (compact ? 86 : 80), compact ? 14 : 10, C.mint, { weight: 900 });
     } else if (open) {
       drawText(g, stage === Math.max(1, cleared + 1) ? '▶ 当前关卡' : '可挑战',
-        x + 12, y + (compact ? 86 : 80), compact ? 13 : 10, accent, { weight: 900 });
+        x + 12, y + (compact ? 86 : 80), compact ? 14 : 10, accent, { weight: 900 });
     } else {
-      drawText(g, '锁定', x + 12, y + (compact ? 86 : 80), compact ? 13 : 10, withAlpha(C.cream, .4), { weight: 800 });
+      drawText(g, '锁定', x + 12, y + (compact ? 86 : 80), compact ? 14 : 10, withAlpha(C.cream, .4), { weight: 800 });
     }
     const storyAt = STORY_CHAPTERS.find(ch => ch.stage === stage);
-    if (storyAt) drawText(g, '剧情', x + cardW - 12, y + (compact ? 86 : 80), compact ? 13 : 9,
+    if (storyAt) drawText(g, '剧情', x + cardW - 12, y + (compact ? 86 : 80), compact ? 14 : 9,
       C.lavender, { align: 'right', weight: 900 });
     g.restore();
     if (open) storyStageRects.push({ stage, x, y, w: cardW, h: cardH });
   }
   drawText(g, '点击已解锁关卡开始 · 关卡进度自动写入检查点 · Esc 返回主页',
-    W / 2, compact ? 704 : 684, compact ? 13 : 10, withAlpha(C.cream, .5), { align: 'center', weight: 700 });
+    W / 2, compact ? 688 : 684, compact ? 14 : 10, withAlpha(C.cream, .5), { align: 'center', weight: 700 });
   storyStageRects.push({ stage: 0, id: 'back', ...back });
 }
 
@@ -11644,6 +11666,24 @@ function v11ReturnFromModeSelect() {
   state = 'title';
   clearInput();
   sfx('click');
+}
+
+/* v1.1.3 补充项：游戏内设置「返回模式选择」——放弃本局并回到模式页。
+   复用 returnToHome 的 run/player/实体清理，再把落点从 title 改为 modeSelect。 */
+function v11AbandonRunToModeSelect() {
+  if (settingsReturn !== 'playing' && settingsReturn !== 'paused') return;
+  returnToHome();
+  if (typeof releaseTouchControls === 'function') releaseTouchControls();
+  clearInput();
+  settingsReturn = 'title';
+  V11_PAGES.modeFrom = 'home';
+  state = 'modeSelect';
+  sfx('click');
+}
+
+/* 设置面板的第五个按钮只在游戏内（playing / paused 打开设置）显示。 */
+function v11SettingsInRun() {
+  return settingsReturn === 'playing' || settingsReturn === 'paused';
 }
 
 /* 存档页 / 模式页的确认弹窗：旧代码只在 title 状态下处理 confirm，这里补一份。 */
@@ -11899,6 +11939,7 @@ handleDown = function (ev) {
     else if (hit.type === 'touchReset') { v11ResetTouchCfg(); }
     else if (hit.type === 'save') saveSettingsWithNotice();
     else if (hit.type === 'bestiary') openBestiary();
+    else if (hit.type === 'switchmode') v11AbandonRunToModeSelect();
     else if (hit.type === 'back') closeSettings();
     return;
   }
@@ -16105,33 +16146,35 @@ function v11GPress(id) {
 
 /* 主页两套布局（绘制与热区同源）：compact（手机横屏）/ 桌面。
    v1.1.3 补充项：compact 用满 1280×720 —— 顶部整行标题、左侧按钮列 +
-   右侧档案卡、底部 4 等分链接（图鉴 / 日志 / 角色 / 退出）。 */
+   右侧档案卡、底部 4 等分链接（图鉴 / 日志 / 角色 / 退出），上下安全边距 ≥24。 */
 function v11gHomeLayout() {
   const compact = v11CompactLayout();
   if (compact) {
     const M = 24;
     const right = 1280 - M;
-    const colW = 400;
-    const gapX = 24;
+    const colW = 600;
+    const gapX = 32;
     const rx = M + colW + gapX;
     const rw = right - rx;
+    const linkW = (1280 - M * 2 - 48) / 4;
     return {
       compact,
-      titlePanel: { x: M, y: M, w: 1280 - M * 2, h: 112 },
+      titlePanel: { x: M, y: M, w: 1280 - M * 2, h: 110 },
       bigs: [
-        { id: 'start', label: '开始游戏', sub: '选模式 → 继续找猫', accent: C.coral, x: M, y: 156, w: colW, h: 120 },
-        { id: 'save', label: '存档', sub: '9 格档案 · 五模式一起存', accent: C.gold, x: M, y: 288, w: colW, h: 104 },
-        { id: 'settings', label: '设置', sub: '画面 / 帧数 / 音量', accent: C.mint, x: M, y: 404, w: colW, h: 104 },
+        { id: 'start', label: '开始游戏', sub: '选模式 → 继续找猫', accent: C.coral, x: M, y: 146, w: colW, h: 130 },
+        { id: 'save', label: '存档', sub: '9 格档案 · 五模式一起存', accent: C.gold, x: M, y: 288, w: colW, h: 110 },
+        { id: 'settings', label: '设置', sub: '画面 / 帧数 / 音量', accent: C.mint, x: M, y: 410, w: colW, h: 110 },
       ],
-      card: { x: rx, y: 156, w: rw, h: 352 },
+      card: { x: rx, y: 146, w: rw, h: 374 },
       cur: null,
       links: [
-        { id: 'bestiary', label: '模型图鉴', x: M, y: 532, w: (1280 - M * 2 - 48) / 4, h: 72 },
-        { id: 'changelog', label: '更新日志', x: M + ((1280 - M * 2 - 48) / 4 + 16), y: 532, w: (1280 - M * 2 - 48) / 4, h: 72 },
-        { id: 'charshop', label: '角色选择', x: M + 2 * ((1280 - M * 2 - 48) / 4 + 16), y: 532, w: (1280 - M * 2 - 48) / 4, h: 72 },
-        { id: 'exit', label: '退出', x: M + 3 * ((1280 - M * 2 - 48) / 4 + 16), y: 532, w: (1280 - M * 2 - 48) / 4, h: 72 },
+        { id: 'bestiary', label: '模型图鉴', x: M, y: 550, w: linkW, h: 72 },
+        { id: 'changelog', label: '更新日志', x: M + (linkW + 16), y: 550, w: linkW, h: 72 },
+        { id: 'charshop', label: '角色选择', x: M + 2 * (linkW + 16), y: 550, w: linkW, h: 72 },
+        { id: 'exit', label: '退出', x: M + 3 * (linkW + 16), y: 550, w: linkW, h: 72 },
       ],
-      version: { x: right, y: 694 },
+      version: { x: right, y: 680 },
+      hint: { x: M, y: 680 },
     };
   }
   return {
@@ -16166,12 +16209,12 @@ v11DrawTitleScreen = function (g, t) {
   fillRound(g, tp.x + 16, tp.y + 18, 7, tp.h - 36, 4, C.coral);
 
   const t1 = lay.compact ? 46 : 60;
-  drawText(g, '为喵寻喵', tp.x + 36, tp.y + (lay.compact ? 46 : 74), t1, V11_THEME.bgTop,
+  drawText(g, '为喵寻喵', tp.x + 36, tp.y + (lay.compact ? 42 : 74), t1, V11_THEME.bgTop,
     { weight: 900, line: 8, stroke: V11_THEME.ink });
   drawText(g, '为喵，寻喵。找不到就先打一架。', tp.x + 38, tp.y + (lay.compact ? 78 : 146),
     lay.compact ? 18 : 19, C.coralDeep, { weight: 900 });
   drawText(g, 'MEOW SEEKS MEOW · 联网版 ' + v11Version(), tp.x + 38, tp.y + (lay.compact ? 100 : 178),
-    lay.compact ? 13 : 10, V11_THEME.muted, { weight: 700 });
+    lay.compact ? 14 : 10, V11_THEME.muted, { weight: 700 });
 
   for (const b of lay.bigs) {
     v11gDrawBrightBig(g, b);
@@ -16191,7 +16234,11 @@ v11DrawTitleScreen = function (g, t) {
   }
   if (lay.version) {
     drawText(g, '版本 ' + v11Version(), lay.version.x, lay.version.y,
-      lay.compact ? 13 : 10, V11_THEME.muted, { align: 'right', weight: 700 });
+      lay.compact ? 14 : 10, V11_THEME.muted, { align: 'right', weight: 700 });
+  }
+  if (lay.compact && lay.hint) {
+    drawText(g, '横屏已适配 · 触摸操控', lay.hint.x, lay.hint.y,
+      14, V11_THEME.muted, { weight: 700 });
   }
 
   if (toast) drawBannerAndToast(g, t);
@@ -16213,7 +16260,7 @@ function v11gDrawProfileCard(g, card, compact) {
       compact ? 15 : 12, i ? V11_THEME.inkSoft : V11_THEME.ink, { weight: i ? 600 : 800 });
   }
   if (compact) {
-    drawText(g, '进度按模式独立存档 · 切换不串档', card.x + 24, card.y + card.h - 30, 13,
+    drawText(g, '进度按模式独立存档 · 切换不串档', card.x + 24, card.y + card.h - 30, 14,
       V11_THEME.muted, { weight: 700 });
   }
 }
@@ -17436,13 +17483,13 @@ function v11hDrawCharCard(g, r, cat, lay, selected) {
   strokeRound(g, r.x, r.y, r.w, r.h, 14, selected ? C.goldDeep : withAlpha(C.ink, hov ? .8 : .45), selected ? 3.6 : 1.8);
   fillRound(g, r.x, r.y, r.w, 5, 2.5, cat.accent);
 
-  drawText(g, cat.tier, r.x + 12, r.y + (compact ? 22 : 18), compact ? 13 : 10,
+  drawText(g, cat.tier, r.x + 12, r.y + (compact ? 22 : 18), compact ? 14 : 10,
     withAlpha(C.ink, .6), { weight: 800 });
   v11hDrawFigureAt(g, r.x + r.w / 2, r.y + (compact ? 84 : 78), compact ? 26 : 24, cat, null, time, {});
   drawText(g, cat.name, r.x + r.w / 2, r.y + (compact ? 138 : 124), compact ? 20 : 16,
     V11_THEME.ink, { align: 'center', weight: 900 });
-  drawText(g, '底猫 · 流派形态进局后决定', r.x + r.w / 2, r.y + (compact ? 160 : 141),
-    compact ? 13 : 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
+  drawText(g, '底猫 · 流派形态进局后决定', r.x + r.w / 2, r.y + (compact ? 158 : 141),
+    compact ? 14 : 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
 
   if (selected) {
     // 右上内侧，留 12px 边距，绝不越出卡片
@@ -17450,7 +17497,7 @@ function v11hDrawCharCard(g, r, cat, lay, selected) {
     const bx = r.x + r.w - bw - 8;
     const by = r.y + 8;
     fillRound(g, bx, by, bw, bh, 8, C.gold);
-    drawText(g, '✓ 当前', bx + bw / 2, by + bh / 2, compact ? 13 : 10, V11_THEME.ink,
+    drawText(g, '✓ 当前', bx + bw / 2, by + bh / 2, compact ? 14 : 10, V11_THEME.ink,
       { align: 'center', weight: 900 });
   }
 }
@@ -17462,7 +17509,7 @@ function v11hDrawCharShop(g, t) {
   const compact = lay.compact;
   drawText(g, '角色选择', 52, 42, compact ? 46 : 30, V11_THEME.ink, { weight: 900 });
   drawText(g, '10 只底猫自由选 · 进局后共鸣哪个流派就变哪个流派形态 · 选中的底猫立刻上场', 54,
-    compact ? 84 : 74, compact ? 13 : 11, V11_THEME.inkSoft, { weight: 700 });
+    compact ? 84 : 74, compact ? 14 : 11, V11_THEME.inkSoft, { weight: 700 });
 
   const back = { x: 1040, y: 32, w: 184, h: 54 };
   const bh = pointRect(mouse, back);
@@ -17485,7 +17532,7 @@ function v11hDrawCharShop(g, t) {
   drawText(g, '预览 · ' + previewCat.name + ' × ' + pick.name, preview.x + 72, preview.y + 26,
     compact ? 15 : 13, V11_THEME.ink, { weight: 900 });
   drawText(g, 'T1 形态 · 双核心 Lv4 进阶「' + pick.def.secondName + '」', preview.x + 72, preview.y + 50,
-    compact ? 13 : 10, V11_THEME.inkSoft, { weight: 700 });
+    compact ? 14 : 10, V11_THEME.inkSoft, { weight: 700 });
 
   for (let i = 0; i < V11_CATS.length; i++) {
     const cat = V11_CATS[i];
@@ -17517,9 +17564,9 @@ function v11hDrawCharShop(g, t) {
       previewCat, { schoolId: def.id, tier: 1, color: def.color }, t,
       { headOnly: true, fxScale: typeof V11_PROFILE !== 'undefined' && V11_PROFILE ? V11_PROFILE.particleMul : 1 });
     drawText(g, def.name, r.x + (compact ? 72 : 62), r.y + 30, compact ? 18 : 15, V11_THEME.ink, { weight: 900 });
-    drawText(g, def.secondName, r.x + (compact ? 72 : 62), r.y + (compact ? 56 : 52), compact ? 13 : 9,
+    drawText(g, def.secondName, r.x + (compact ? 72 : 62), r.y + (compact ? 56 : 52), compact ? 14 : 9,
       V11_THEME.inkSoft, { weight: 700 });
-    drawText(g, '核心双 Lv4 → T2', r.x + (compact ? 72 : 62), r.y + (compact ? 82 : 76), compact ? 13 : 9,
+    drawText(g, '核心双 Lv4 → T2', r.x + (compact ? 72 : 62), r.y + (compact ? 82 : 76), compact ? 14 : 9,
       V11_THEME.muted, { weight: 700 });
     V11H_SHOP_RECTS.push({ id: 'shopSchool', schoolId: def.id, ...r });
   }
@@ -17557,18 +17604,18 @@ function v11hDrawCharShop(g, t) {
     const picX = compact ? 1060 : 1090;
     v11hDrawPhotoCircle(g, picX, py + ph / 2, compact ? 26 : 24, t);
     drawText(g, '已保存 ' + Math.round(v11hDataUrlBytes(V11_PHOTO) / 1024) + ' KB',
-      picX + 34, py + ph / 2 - 8, compact ? 13 : 11, V11_THEME.inkSoft, { weight: 800 });
-    drawText(g, '256×256 · JPEG', picX + 34, py + ph / 2 + 10, compact ? 13 : 9,
+      picX + 34, py + ph / 2 - 8, compact ? 14 : 11, V11_THEME.inkSoft, { weight: 800 });
+    drawText(g, '256×256 · JPEG', picX + 34, py + ph / 2 + 10, compact ? 14 : 9,
       V11_THEME.muted, { weight: 700 });
   } else {
     drawText(g, '照片只在绘制时裁圆 · 四角不会出现色块 · 只存本机', compact ? 460 : 480,
-      py + ph / 2 - 8, compact ? 13 : 11, V11_THEME.inkSoft, { weight: 700 });
+      py + ph / 2 - 8, compact ? 14 : 11, V11_THEME.inkSoft, { weight: 700 });
     drawText(g, '支持 JPG / PNG / WebP，自动居中裁切并压到 ≤100KB', compact ? 460 : 480,
-      py + ph / 2 + 12, compact ? 13 : 10, V11_THEME.muted, { weight: 700 });
+      py + ph / 2 + 12, compact ? 14 : 10, V11_THEME.muted, { weight: 700 });
   }
 
   drawText(g, '流派形态由战斗共鸣决定 · 底猫与照片主角二选一 · 角色选择独立于存档，不进 run / save',
-    W / 2, compact ? 700 : 704, compact ? 13 : 10, V11_THEME.muted,
+    W / 2, compact ? 688 : 704, compact ? 14 : 10, V11_THEME.muted,
     { align: 'center', weight: 700 });
 }
 
@@ -17593,7 +17640,7 @@ function v11hHomeCharRect() {
   if (lay.compact) {
     const link = (lay.links || []).find(l => l.id === 'charshop');
     if (link) return { x: link.x, y: link.y, w: link.w, h: link.h };
-    return { x: 24, y: 532, w: 296, h: 72 };
+    return { x: 648, y: 550, w: 296, h: 72 };
   }
   return { x: 112, y: 658, w: 470, h: 48 };
 }
@@ -17693,7 +17740,7 @@ function v11hDrawCharBestiary(g, t) {
   drawText(g, '角色图鉴', compact ? 32 : 52, compact ? 52 : 42, compact ? 46 : 30, V11_THEME.ink, { weight: 900 });
   const photoCount = V11_PHOTO ? 1 : 0;
   drawText(g, `10 只内置底猫 + ${photoCount} 个自定义主角 · 进局后按共鸣流派变形态`,
-    compact ? 34 : 54, compact ? 94 : 74, compact ? 13 : 11, V11_THEME.inkSoft, { weight: 700 });
+    compact ? 34 : 54, compact ? 94 : 74, compact ? 14 : 11, V11_THEME.inkSoft, { weight: 700 });
 
   const back = compact ? { x: 1096, y: 24, w: 160, h: 52 } : { x: 1040, y: 32, w: 184, h: 54 };
   const bh = pointRect(mouse, back);
@@ -17729,14 +17776,14 @@ function v11hDrawCharBestiary(g, t) {
     fillRound(g, x, y, cardW, 5, 2.5, accent);
 
     const topY = y + (compact ? 22 : 19);
-    const smallSize = compact ? 13 : 10;
+    const smallSize = compact ? 14 : 10;
     if (cell.kind === 'cat') {
       drawText(g, '内置底猫 · ' + cell.cat.tier, x + 12, topY, smallSize, withAlpha(C.ink, .62), { weight: 700 });
       drawText(g, selected ? '当前主角' : '可选', x + cardW - 12, topY, smallSize, accent, { align: 'right', weight: 900 });
       v11hDrawFigureAt(g, x + cardW / 2, y + (compact ? 74 : 80), compact ? 26 : 25, cell.cat, null, t, {});
       drawText(g, cell.cat.name, x + cardW / 2, y + (compact ? 122 : 132), compact ? 20 : 15, V11_THEME.ink, { align: 'center', weight: 900 });
-      drawText(g, '底猫 · 流派形态见「流派形态」分页', x + cardW / 2, y + (compact ? 146 : 150),
-        compact ? 13 : 8, V11_THEME.inkSoft, { align: 'center', weight: 700 });
+      drawText(g, '底猫 · 流派形态见「流派形态」分页', x + cardW / 2, y + (compact ? 144 : 150),
+        compact ? 14 : 8, V11_THEME.inkSoft, { align: 'center', weight: 700 });
       bestiaryRects.push({ id: 'charCard', presetId: cell.cat.id, x, y, w: cardW, h: cardH });
     } else if (cell.kind === 'photo') {
       drawText(g, '自定义主角', x + 12, topY, smallSize, withAlpha(C.ink, .62), { weight: 700 });
@@ -17757,13 +17804,13 @@ function v11hDrawCharBestiary(g, t) {
       drawText(g, '📷 用我的照片当主角', x + cardW / 2, y + (compact ? 78 : 78),
         compact ? 18 : 13, C.coralDeep, { align: 'center', weight: 900 });
       drawText(g, '点卡片导入 · 只存在本机', x + cardW / 2, y + (compact ? 144 : 138),
-        compact ? 13 : 11, V11_THEME.inkSoft, { align: 'center', weight: 700 });
+        compact ? 14 : 11, V11_THEME.inkSoft, { align: 'center', weight: 700 });
       bestiaryRects.push({ id: 'charPhotoEmpty', x, y, w: cardW, h: cardH });
     }
   }
 
   drawText(g, '选中的猫会立刻替换战斗主角 · 形态数值与命中半径完全不变',
-    W / 2, compact ? 692 : 700, compact ? 13 : 10, V11_THEME.muted, { align: 'center', weight: 700 });
+    W / 2, compact ? 688 : 700, compact ? 14 : 10, V11_THEME.muted, { align: 'center', weight: 700 });
 }
 
 /* B5：角色形态分页 · 1 基础 + 5 流派 × 2 阶；小图 ≤64px，手机降粒子。 */
@@ -17773,7 +17820,7 @@ function v11hDrawFormsBestiary(g, t) {
   v11ThemeBg(g, t, { variant: 'bestiaryChar' });
   drawText(g, '流派形态图鉴', compact ? 32 : 52, compact ? 52 : 42, compact ? 46 : 30, V11_THEME.ink, { weight: 900 });
   drawText(g, '1 基础底猫 + 5 流派 × 2 阶 = 11 套形态 · 全部 Canvas 程序化，不使用外部图',
-    compact ? 34 : 54, compact ? 94 : 74, compact ? 13 : 11, V11_THEME.inkSoft, { weight: 700 });
+    compact ? 34 : 54, compact ? 94 : 74, compact ? 14 : 11, V11_THEME.inkSoft, { weight: 700 });
 
   const back = compact ? { x: 1096, y: 24, w: 160, h: 52 } : { x: 1040, y: 32, w: 184, h: 54 };
   const bh = pointRect(mouse, back);
@@ -17813,17 +17860,17 @@ function v11hDrawFormsBestiary(g, t) {
     fillRound(g, x, y, cardW, cardH, 14, V11_THEME.card);
     strokeRound(g, x, y, cardW, cardH, 14, withAlpha(accent, .62), 1.8);
     fillRound(g, x, y, cardW, 5, 2.5, accent);
-    drawText(g, tag, x + 12, y + (compact ? 22 : 20), compact ? 13 : 10, withAlpha(C.ink, .62), { weight: 700 });
+    drawText(g, tag, x + 12, y + (compact ? 22 : 20), compact ? 14 : 10, withAlpha(C.ink, .62), { weight: 700 });
     drawText(g, def ? def.short + ' T' + cell.tier : 'BASE', x + cardW - 12, y + (compact ? 22 : 20),
-      compact ? 13 : 10, accent, { align: 'right', weight: 900 });
+      compact ? 14 : 10, accent, { align: 'right', weight: 900 });
     v11hDrawFigureAt(g, x + cardW / 2, y + (compact ? 74 : 80), def ? (compact ? 22 : 16) : (compact ? 25 : 19), cat, form, t, { fxScale });
     drawText(g, name, x + cardW / 2, y + (compact ? 122 : 132), compact ? 20 : 15, V11_THEME.ink, { align: 'center', weight: 900 });
     drawText(g, def ? def.name + ' · ' + (cell.tier >= 2 ? 'T2' : 'T1') : '脸型 + 底色微差，进局后叠加流派主题',
-      x + cardW / 2, y + (compact ? 146 : 150), compact ? 13 : 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
+      x + cardW / 2, y + (compact ? 144 : 150), compact ? 14 : 9, V11_THEME.inkSoft, { align: 'center', weight: 700 });
   }
 
   drawText(g, '底猫只决定脸型与底色 · 流派主题占 85%+ · 手机粒子按档位 ×0.6',
-    W / 2, compact ? 692 : 690, compact ? 13 : 10, V11_THEME.muted, { align: 'center', weight: 700 });
+    W / 2, compact ? 688 : 690, compact ? 14 : 10, V11_THEME.muted, { align: 'center', weight: 700 });
 }
 
 const V11H_LEGACY_BESTIARY = v11DrawBestiaryScreen;
@@ -19746,8 +19793,8 @@ function v11jInjectPwa() {
       description: '为喵，寻喵。找不到就先打一架。',
       start_url: location.origin + location.pathname,
       scope: location.origin + '/',
-      display: 'fullscreen',
-      orientation: 'any',
+      display: 'standalone',
+      orientation: 'landscape',
       background_color: '#ffe9cd',
       theme_color: '#ffcc4d',
       icons: V11J_PWA.iconData ? [{ src: V11J_PWA.iconData, sizes: '192x192', type: 'image/png', purpose: 'any' }] : [],
@@ -19778,6 +19825,35 @@ function v11jInjectPwa() {
     'html.pseudo-fullscreen,body.pseudo-fullscreen,#stage{background:#ffe9cd;}',
   ].join('\n'));
   v11jProbeSafeArea();
+  v11jArmOrientationLock();
+}
+
+/* v1.1.3 补充项：首次用户手势后尝试锁定横屏。
+   Android / 安装版 PWA 生效；iOS Safari 无 screen.orientation.lock 或拒绝时静默忽略。
+   只绑一次、只在手势回调里调用，绝不 preventDefault，不阻断游戏输入。 */
+let v11jOrientationLockArmed = false;
+function v11jArmOrientationLock() {
+  if (v11jOrientationLockArmed) return;
+  v11jOrientationLockArmed = true;
+  if (!V11_PROFILE.mobile && !V11J_PWA.standalone) return;
+  let tried = false;
+  function tryLock() {
+    if (tried) return;
+    tried = true;
+    try {
+      const so = screen.orientation;
+      if (so && typeof so.lock === 'function') {
+        const ret = so.lock('landscape');
+        if (ret && typeof ret.catch === 'function') ret.catch(() => {});
+      }
+    } catch (e) { /* iOS / 桌面浏览器：静默放弃 */ }
+    try { window.removeEventListener('pointerdown', tryLock, true); } catch (e) { /* 忽略 */ }
+    try { window.removeEventListener('touchstart', tryLock, true); } catch (e) { /* 忽略 */ }
+  }
+  try {
+    window.addEventListener('pointerdown', tryLock, { capture: true, passive: true, once: true });
+    window.addEventListener('touchstart', tryLock, { capture: true, passive: true, once: true });
+  } catch (e) { /* 老浏览器：只放弃锁定，不影响游戏 */ }
 }
 
 /* ---------------- 3. 画布同步（手机铺满，桌面原路径） ---------------- */
@@ -20140,6 +20216,9 @@ function v11jDrawRotateGate(g, t) {
     C.cream, { align: 'center', weight: 900, line: 6 });
   drawText(ctx, '手机端只支持横屏 · 把手机转 90° 就能开打', cx, cy + 52,
     Math.max(13, Math.min(16, ui.cssW * .024)), withAlpha(C.cream, .72),
+    { align: 'center', weight: 700, line: 0 });
+  drawText(ctx, '如已横屏仍不显示，请点右上角 ⋯ → 在浏览器中打开', cx, cy + 84,
+    Math.max(13, Math.min(15, ui.cssW * .033)), withAlpha(C.cream, .58),
     { align: 'center', weight: 700, line: 0 });
   drawText(ctx, '此页忽略点击与触摸 · 横屏后自动恢复', cx, ui.cssH - 30,
     Math.max(13, Math.min(15, ui.cssW * .022)), withAlpha(C.cream, .5),
@@ -20535,13 +20614,13 @@ function v11jMenuButton(g, r, label, sub, accent, primary) {
   strokeRound(g, r.x, r.y + (hov ? 1 : 0), r.w, r.h, 14,
     primary ? withAlpha(C.ink, .55) : V11_THEME.line, primary ? 2.6 : 2);
   fillRound(g, r.x + 4, r.y + (hov ? 1 : 0) + 4, 5, r.h - 8, 2.5, accent);
-  // v1.1.3 补充项：手机横屏字号上调，正文按钮 ≥18 / 小注 ≥13。
+  // v1.1.3 补充项：手机横屏字号上调，正文按钮 ≥18 / 小注 ≥14。
   const labelSize = Math.max(18, Math.min(26, r.h * .34));
   drawText(g, label, r.x + r.w / 2, r.y + (sub ? r.h * .36 : r.h / 2) + (hov ? 1 : 0),
     labelSize, C.ink, { align: 'center', weight: 900, line: 0 });
   if (sub) {
     drawText(g, sub, r.x + r.w / 2, r.y + r.h * .72 + (hov ? 1 : 0),
-      Math.max(13, Math.min(15, r.h * .2)), V11_THEME.inkSoft, { align: 'center', weight: 700, line: 0 });
+      Math.max(14, Math.min(15, r.h * .2)), V11_THEME.inkSoft, { align: 'center', weight: 700, line: 0 });
   }
 }
 
@@ -20559,18 +20638,19 @@ function v11jTitleLayout() {
   const ui = V11J_UI, S = V11J_SAFE;
   const left = S.left + 24, right = ui.cssW - S.right - 24;
   const w = Math.max(240, right - left);
-  const header = { x: left, y: S.top + 14, w, h: 104 };
-  const bodyY = header.y + header.h + 16;
-  const colW = Math.max(220, Math.min(360, Math.floor(w * .45)));
-  const gap = 12;
-  const start = { x: left, y: bodyY, w: colW, h: 78 };
-  const save = { x: left, y: start.y + start.h + gap, w: colW, h: 58 };
-  const settings = { x: left, y: save.y + save.h + gap, w: colW, h: 58 };
+  const header = { x: left, y: S.top + 24, w, h: 104 };
+  const bodyY = header.y + header.h + 12;
+  const colW = Math.max(240, Math.min(360, Math.floor(w * .48)));
+  const gap = 8;
+  const start = { x: left, y: bodyY, w: colW, h: 68 };
+  const halfW = (colW - gap) / 2;
+  const save = { x: left, y: start.y + start.h + gap, w: halfW, h: 52 };
+  const settings = { x: left + halfW + gap, y: start.y + start.h + gap, w: halfW, h: 52 };
   const rx = left + colW + 16;
   const rw = Math.max(200, right - rx);
   const profileRect = { x: rx, y: bodyY, w: rw, h: start.h + gap + save.h };
   const linkGap = 8;
-  const linkY = profileRect.y + profileRect.h + 12;
+  const linkY = profileRect.y + profileRect.h + 8;
   const linkW = (rw - linkGap * 3) / 4;
   const linkH = 54;
   const buttons = [];
@@ -20591,7 +20671,7 @@ function v11jTitleLayout() {
   });
   return {
     header, profile: profileRect, start, buttons,
-    versionY: ui.cssH - S.bottom - 12,
+    versionY: ui.cssH - Math.max(S.bottom, 24) - 12,
     pwaY: header.y + 10,
     gridBottom: linkY + linkH,
   };
@@ -20611,9 +20691,9 @@ function v11jDrawTitleCss(g, t) {
   const hcx = L.header.x + L.header.w / 2;
   drawText(g, '为喵寻喵', hcx, L.header.y + 46, 46, C.ink,
     { align: 'center', weight: 900, line: 0 });
-  drawText(g, '为喵，寻喵。找不到就先打一架。', hcx, L.header.y + 74, 13, C.coralDeep,
+  drawText(g, '为喵，寻喵。找不到就先打一架。', hcx, L.header.y + 76, 14, C.coralDeep,
     { align: 'center', weight: 800, line: 0 });
-  drawText(g, `MEOW SEEKS MEOW · 联网版 ${v11Version()}`, hcx, L.header.y + 94, 13,
+  drawText(g, `MEOW SEEKS MEOW · 联网版 ${v11Version()}`, hcx, L.header.y + 96, 14,
     V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 
   // 档案摘要（右侧卡片：标题 / 存档位 / 两模式进度 / 提示）
@@ -20622,7 +20702,7 @@ function v11jDrawTitleCss(g, t) {
   fillRound(g, p.x, p.y, p.w, p.h, 14, withAlpha('#fffaf0', .92));
   strokeRound(g, p.x, p.y, p.w, p.h, 14, withAlpha(C.mint, profile ? .6 : .32), 2.2);
   fillRound(g, p.x + 8, p.y + 8, p.w - 16, 6, 3, withAlpha(C.mint, .75));
-  drawText(g, '当前档案', p.x + 16, p.y + 30, 18, C.ink, { weight: 900, line: 0 });
+  drawText(g, '当前档案', p.x + 16, p.y + 26, 18, C.ink, { weight: 900, line: 0 });
   let charName = '默认猫猫';
   try {
     if (typeof V11_CHAR !== 'undefined' && V11_CHAR) {
@@ -20635,14 +20715,14 @@ function v11jDrawTitleCss(g, t) {
   } catch (e) { /* 配置未就绪时回退默认名 */ }
   const slotLine = profile ? `存档位 ${activeSlot || '—'} · 角色 ${charName}`
     : '还没有档案';
-  drawText(g, slotLine, p.x + 16, p.y + 62, 15, profile ? C.coralDeep : C.inkSoft,
+  drawText(g, slotLine, p.x + 16, p.y + 52, 15, profile ? C.coralDeep : C.inkSoft,
     { weight: 800, line: 0 });
   const progLine = profile
     ? `简单 ${modeProgressLabel('easy', profile.modes.easy || {})} · 剧情 ${modeProgressLabel('story', profile.modes.story || {})}`
     : '点「开始游戏」新建或载入一份';
-  drawText(g, progLine, p.x + 16, p.y + 94, 13, V11_THEME.inkSoft, { weight: 700, line: 0 });
+  drawText(g, progLine, p.x + 16, p.y + 78, 14, V11_THEME.inkSoft, { weight: 700, line: 0 });
   drawText(g, profile ? '进度按模式独立存档 · 切换不串档' : '建好档案后就能选模式开打',
-    p.x + 16, p.y + 122, 13, V11_THEME.muted, { weight: 700, line: 0 });
+    p.x + 16, p.y + 102, 14, V11_THEME.muted, { weight: 700, line: 0 });
 
   for (const b of L.buttons) {
     v11jMenuButton(g, b, b.label, b.sub, b.accent, b.primary);
@@ -20654,7 +20734,7 @@ function v11jDrawTitleCss(g, t) {
   drawText(g, dBg
     ? `适配自检 · 安全区 ${Math.round(S.top)}px · 屏幕 ${Math.round(ui.cssW)}×${Math.round(ui.cssH)}`
     : '横屏已适配 · 触摸操控',
-  ui.cssW / 2, L.versionY, 13, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
+  ui.cssW / 2, L.versionY, 14, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 }
 
 function v11jPwaHomeActive() {
@@ -20677,17 +20757,17 @@ function v11jDrawPwaCardCss(g) {
   const ui = V11J_UI, S = V11J_SAFE;
   // v1.1.3 补充项：横屏主页把安装卡收进标题底板右上角，不再压住按钮 / 链接。
   const header = v11jTitleLayout().header;
-  const w = Math.min(240, Math.max(160, header.w * .3));
-  const h = 44;
+  const w = Math.min(240, Math.max(190, header.w * .3));
+  const h = 48;
   const x = header.x + header.w - w - 8;
   const y = header.y + 6;
   const card = { x, y, w, h };
   fillRound(g, x + 2, y + 3, w, h, 12, 'rgba(43,32,48,.2)');
   fillRound(g, x, y, w, h, 12, '#fffaf0');
   strokeRound(g, x, y, w, h, 12, withAlpha(C.gold, .8), 2.2);
-  drawText(g, '📲 安装到主屏幕', x + 12, y + h / 2, 13, C.ink,
+  drawText(g, '📲 安装到主屏幕', x + 12, y + h / 2, 14, C.ink,
     { weight: 900, line: 0 });
-  const close = { x: x + w - 44, y: y, w: 44, h: 44 };
+  const close = { x: x + w - 48, y: y, w: 48, h: 48 };
   fillRound(g, close.x, close.y, close.w, close.h, 11, withAlpha(C.ink, .06));
   strokeRound(g, close.x, close.y, close.w, close.h, 11, withAlpha(C.ink, .18), 1.5);
   drawText(g, '✕', close.x + close.w / 2, close.y + close.h / 2 + 1, 18, C.inkSoft,
@@ -20699,12 +20779,12 @@ function v11jDrawPwaCardCss(g) {
   V11J_UI_RECTS.title.push({ id: 'pwaCard', ...card });
 }
 
-/* v1.1.3 补充项：模式页横屏重排——标题 46 / 三列铺满 / 名称 22 / 小注 ≥13。 */
+/* v1.1.3 补充项：模式页横屏重排——标题 46 / 三列铺满 / 名称 22 / 小注 ≥14。 */
 function v11jModeLayout() {
   const ui = V11J_UI, S = V11J_SAFE;
   const left = S.left + 24, right = ui.cssW - S.right - 24;
   const w = Math.max(200, right - left);
-  const headerY = S.top + 6;
+  const headerY = S.top + 24;
   const back = { x: left, y: headerY, w: 52, h: 52 };
   const gear = { x: right - 100, y: headerY, w: 100, h: 52 };
   const profileRect = { x: left, y: headerY + 72, w, h: 38 };
@@ -20712,7 +20792,8 @@ function v11jModeLayout() {
   const cw = (w - gapX * (cols - 1)) / cols;
   const startY = profileRect.y + profileRect.h + 10;
   const rows = Math.ceil(Math.max(1, MODE_LIST.length) / cols);
-  const avail = ui.cssH - S.bottom - startY - 34;
+  const footerY = ui.cssH - Math.max(S.bottom, 24) - 10;
+  const avail = footerY - 20 - startY;
   const ch = Math.max(84, Math.min(126, Math.floor((avail - gapY * (rows - 1)) / Math.max(1, rows))));
   const cards = [];
   for (let i = 0; i < MODE_LIST.length; i++) {
@@ -20723,7 +20804,7 @@ function v11jModeLayout() {
     });
   }
   const gridBottom = startY + rows * ch + (rows - 1) * gapY;
-  return { back, gear, profile: profileRect, cards, gridBottom };
+  return { back, gear, profile: profileRect, cards, gridBottom, footerY };
 }
 
 function v11jModeLocked(id) {
@@ -20736,9 +20817,9 @@ function v11jDrawModeSelectCss(g, t) {
   const L = v11jModeLayout();
   V11J_UI_RECTS.mode.length = 0;
 
-  drawText(g, '选择模式', ui.cssW / 2, S.top + 32, 46, C.ink,
+  drawText(g, '选择模式', ui.cssW / 2, S.top + 52, 46, C.ink,
     { align: 'center', weight: 900, line: 0 });
-  drawText(g, '五个模式各存各的进度 · 切换不串档', ui.cssW / 2, S.top + 62, 13,
+  drawText(g, '五个模式各存各的进度 · 切换不串档', ui.cssW / 2, S.top + 82, 14,
     V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 
   const backHov = mouse.space === 'css' && pointRect(mouse, L.back);
@@ -20787,26 +20868,26 @@ function v11jDrawModeSelectCss(g, t) {
     const row2 = row1 + 26;
     const row3 = Math.min(row2 + 24, r.y + r.h - 12);
     drawText(g, m.name, textX, row1, 22, C.ink, { weight: 900, line: 0 });
-    drawText(g, m.label || '', textX, row2, 13, V11_THEME.inkSoft, { weight: 700, line: 0 });
+    drawText(g, m.label || '', textX, row2, 14, V11_THEME.inkSoft, { weight: 700, line: 0 });
     const mp = profile ? profile.modes[id] : null;
     const prog = mp ? modeProgressLabel(id, mp) : (locked ? '未解锁' : '未选档案');
     const capText = id === 'infinite' ? '最终 ∞' : `最终 ${v11iModeCap(id)} 关`;
     if (wide) {
       drawText(g, prog, r.x + r.w - 12, row1, 15,
         mp ? C.coralDeep : withAlpha(C.inkSoft, .8), { align: 'right', weight: 900, line: 0 });
-      drawText(g, locked ? '通关剧情后开放' : capText, r.x + r.w - 12, row2, 13,
+      drawText(g, locked ? '通关剧情后开放' : capText, r.x + r.w - 12, row2, 14,
         V11_THEME.muted, { align: 'right', weight: 700, line: 0 });
-      drawText(g, locked ? '先通关剧情模式' : '点击进入 · 继续找猫', textX, row3, 13,
+      drawText(g, locked ? '先通关剧情模式' : '点击进入 · 继续找猫', textX, row3, 14,
         V11_THEME.muted, { weight: 700, line: 0 });
     } else {
-      drawText(g, locked ? '通关剧情后开放' : `进度 ${prog} · ${capText}`, textX, row3, 13,
+      drawText(g, locked ? '通关剧情后开放' : `进度 ${prog} · ${capText}`, textX, row3, 14,
         V11_THEME.muted, { weight: 700, line: 0 });
     }
     if (!locked) V11J_UI_RECTS.mode.push({ id: 'mode:' + id, ...r });
     g.restore();
   }
   drawText(g, '简单 / 困难 / 地狱 ×1.0 / ×1.8 / ×3.0 · 剧情 ×0.7 + 章节对白',
-    ui.cssW / 2, Math.min(L.gridBottom + 20, ui.cssH - S.bottom - 10), 13,
+    ui.cssW / 2, L.footerY, 14,
     V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 }
 /* ---------------- 11. 覆盖层：暂停 / 死亡 / 结算 / 退出 / 通关 / 升级 ---------------- */
@@ -20843,20 +20924,22 @@ function v11jFitLines(g, text, maxW, size, maxLines) {
   return lines;
 }
 
-function v11jOverlayTitle(g, c, kicker, title, sub, accent) {
-  drawText(g, kicker, c.x + c.w / 2, c.y + 20, 13, V11_THEME.muted, { align: 'center', weight: 900, line: 0 });
-  drawText(g, title, c.x + c.w / 2, c.y + 52, 32, C.ink, { align: 'center', weight: 900, line: 0 });
-  if (sub) drawText(g, sub, c.x + c.w / 2, c.y + 78, 14, V11_THEME.inkSoft,
+function v11jOverlayTitle(g, c, kicker, title, sub, accent, titleSize) {
+  const tSize = titleSize || 32;
+  drawText(g, kicker, c.x + c.w / 2, c.y + 20, 14, V11_THEME.muted, { align: 'center', weight: 900, line: 0 });
+  drawText(g, title, c.x + c.w / 2, c.y + (tSize >= 46 ? 62 : 52), tSize, C.ink, { align: 'center', weight: 900, line: 0 });
+  if (sub) drawText(g, sub, c.x + c.w / 2, c.y + (tSize >= 46 ? 96 : 78), 14, V11_THEME.inkSoft,
     { align: 'center', weight: 700, line: 0 });
-  if (accent) fillRound(g, c.x + 10, c.y + (sub ? 90 : 78), c.w - 20, 3, 1.5, withAlpha(accent, .35));
+  if (accent) fillRound(g, c.x + 10, c.y + (tSize >= 46 ? 100 : (sub ? 90 : 78)), c.w - 20, 3, 1.5, withAlpha(accent, .35));
 }
 
 /* ----- 暂停 ----- */
-/* v1.1.3 补充项：横屏暂停面板 2×2 排布，按钮 ≥48 高、正文 ≥18 / 小注 ≥13。 */
+/* v1.1.3 补充项：横屏暂停面板 2×2 排布，标题 46 / 按钮 ≥48 高 / 正文 ≥18 / 小注 ≥14。 */
 function v11jPauseLayout() {
   const ui = V11J_UI, S = V11J_SAFE;
   const w = Math.min(ui.cssW - S.left - S.right - 48, 680);
-  const gap = 10, headerH = 92, footerH = 30;
+  const short = ui.cssH < 360;
+  const gap = short ? 8 : 10, headerH = short ? 104 : 112, footerH = short ? 24 : 30;
   const bh = Math.max(48, Math.min(62, Math.floor((ui.cssH - S.top - S.bottom - headerH - footerH - gap - 12) / 2)));
   const h = headerH + 2 * bh + gap + footerH;
   const x = (ui.cssW - w) / 2;
@@ -20881,15 +20964,15 @@ function v11jDrawPauseCss(g, t) {
   const L = v11jPauseLayout();
   const p = L.panel;
   v11jOverlayPanel(g, p, C.mint);
-  v11jOverlayTitle(g, { x: p.x, y: p.y, w: p.w, h: 92 }, 'PAUSED · 暂停', '战斗已冻结',
-    room ? `房间 ${run.roomNumber}/${run.roomsThisStage} · ${stageLabel(run.stage, run.mode)}` : stageLabel(run.stage, run.mode), C.mint);
+  v11jOverlayTitle(g, { x: p.x, y: p.y, w: p.w, h: 112 }, 'PAUSED · 暂停', '战斗已冻结',
+    room ? `房间 ${run.roomNumber}/${run.roomsThisStage} · ${stageLabel(run.stage, run.mode)}` : stageLabel(run.stage, run.mode), C.mint, 46);
   V11J_UI_RECTS.paused.length = 0;
   for (const b of L.buttons) {
     v11jMenuButton(g, b, b.label, b.sub, b.accent, false);
     V11J_UI_RECTS.paused.push({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h });
   }
   drawText(g, '设置里可调「手机操控」位置 · 顶部 ⚙ 同样能开设置', p.x + p.w / 2,
-    p.y + p.h - 15, 13, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
+    p.y + p.h - 15, 14, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 }
 
 /* ----- 死亡演出 ----- */
@@ -20900,7 +20983,7 @@ function v11jDrawDeadCss(g, t) {
   drawText(g, '喵…', cx, cy - 14, 44, V11_THEME.ink, { align: 'center', weight: 900, line: 0 });
   drawText(g, '这场猫生到这里，爪印会留下。', cx, cy + 24, 15, V11_THEME.muted,
     { align: 'center', weight: 700, line: 0 });
-  drawText(g, `${Math.max(0, 1.45 - deathTimer).toFixed(2)} 秒后结算`, cx, cy + 50, 13, V11_THEME.muted,
+  drawText(g, `${Math.max(0, 1.45 - deathTimer).toFixed(2)} 秒后结算`, cx, cy + 50, 14, V11_THEME.muted,
     { align: 'center', weight: 700, line: 0 });
 }
 
@@ -20955,16 +21038,16 @@ function v11jDrawGameoverCss(g, t) {
     const sy = a.y;
     fillRound(g, sx, sy, sw, sh, 10, i === 3 ? '#f6edff' : '#fff8e8');
     strokeRound(g, sx, sy, sw, sh, 10, withAlpha(C.ink, .2), 1.5);
-    drawText(g, stats[i][0], sx + sw / 2, sy + 20, 13, withAlpha(C.inkSoft, .7),
+    drawText(g, stats[i][0], sx + sw / 2, sy + 20, 14, withAlpha(C.inkSoft, .7),
       { align: 'center', weight: 700, line: 0 });
     drawText(g, stats[i][1], sx + sw / 2, sy + 44, 18, stats[i][2],
       { align: 'center', weight: 900, line: 0 });
   }
-  const buildY = a.y + a.h + 18;
+  const buildY = a.y + a.h + 16;
   drawText(g, `本局 BUILD · 共 ${Object.values(runNow.upgradeStacks || {}).reduce((s, v) => s + v, 0)} 层增益`,
-    p.x + p.w / 2, buildY, 13, V11_THEME.muted, { align: 'center', weight: 800, line: 0 });
+    p.x + p.w / 2, buildY, 14, V11_THEME.muted, { align: 'center', weight: 800, line: 0 });
   drawText(g, `种子 ${runNow.seedHex} · 最高分 ${formatNum(meta.bestScore)}`,
-    p.x + p.w / 2, buildY + 17, 13, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
+    p.x + p.w / 2, buildY + 16, 14, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 
   V11J_UI_RECTS.gameover.length = 0;
   for (const b of L.buttons) {
@@ -20972,7 +21055,7 @@ function v11jDrawGameoverCss(g, t) {
     V11J_UI_RECTS.gameover.push({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h });
   }
   drawText(g, '每进入一关写入检查点 · 不保存离开会回滚到上次存档', p.x + p.w / 2,
-    L.footerY, 13, V11_THEME.muted, { align: 'center', weight: 600, line: 0 });
+    L.footerY, 14, V11_THEME.muted, { align: 'center', weight: 600, line: 0 });
 }
 
 /* ----- 关卡间 ----- */
@@ -20982,7 +21065,7 @@ function v11jBetweenLayout() {
   const bh = 52, gap = 8;
   const h = 88 + 3 * bh + 2 * gap + 30;
   const x = (ui.cssW - w) / 2;
-  const y = Math.max(S.top + 6, (ui.cssH - h) / 2);
+  const y = Math.max(S.top + 24, (ui.cssH - h) / 2);
   const defs = [
     ['continue', '继续下一关', '保持当前血量与 BUILD', C.mint],
     ['save', '保存进度', activeSlot ? `写入存档位 ${activeSlot}` : '没有存档位', C.gold],
@@ -21010,7 +21093,7 @@ function v11jDrawBetweenCss(g, t) {
     V11J_UI_RECTS.between.push({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h });
   }
   drawText(g, '保存进度会把当前档案整体写回本机 · 不影响其它模式', p.x + p.w / 2,
-    p.y + p.h - 15, 13, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
+    p.y + p.h - 15, 14, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 }
 
 /* ----- 退出确认 ----- */
@@ -21020,7 +21103,7 @@ function v11jExitLayout() {
   const bh = 52, gap = 8;
   const h = 88 + 3 * bh + 2 * gap + 30;
   const x = (ui.cssW - w) / 2;
-  const y = Math.max(S.top + 6, (ui.cssH - h) / 2);
+  const y = Math.max(S.top + 24, (ui.cssH - h) / 2);
   const defs = [
     ['saveExit', '保存后离开', activeSlot ? `写入存档位 ${activeSlot}` : '没有存档位', C.mint],
     ['exit', '不保存离开', '回滚到上次保存的进度', C.coral],
@@ -21048,7 +21131,7 @@ function v11jDrawExitCss(g, t) {
     V11J_UI_RECTS.exit.push({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h });
   }
   drawText(g, '退出不会清空已通关标记 · 下次仍可从检查点继续', p.x + p.w / 2,
-    p.y + p.h - 15, 13, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
+    p.y + p.h - 15, 14, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
 }
 
 /* ----- 通关 ----- */
@@ -21084,7 +21167,7 @@ function v11jDrawVictoryCss(g, t) {
   V11J_UI_RECTS.victory.length = 0;
 
   v11jOverlayPanel(g, p, accent);
-  drawText(g, 'VICTORY · 通关', p.x + p.w / 2, p.y + 20, 13, V11_THEME.muted,
+  drawText(g, 'VICTORY · 通关', p.x + p.w / 2, p.y + 20, 14, V11_THEME.muted,
     { align: 'center', weight: 900, line: 0 });
   drawText(g, '恭喜，你通关了！！！', p.x + p.w / 2, p.y + 60, 46,
     C.ink, { align: 'center', weight: 900, line: 0 });
@@ -21112,7 +21195,7 @@ function v11jDrawVictoryCss(g, t) {
 
   if (!L.compactH) {
     drawText(g, nextMode ? '通关后检查点置空 · 不会从下一关越界' : '地狱模式已通关 · 你是真正的猫猫',
-      p.x + p.w / 2, L.next.y - 14, 13, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
+      p.x + p.w / 2, L.next.y - 14, 14, V11_THEME.muted, { align: 'center', weight: 700, line: 0 });
   }
 
   v11jMenuButton(g, { ...L.next, label: '继续下一难度' }, '继续下一难度',
@@ -21129,7 +21212,7 @@ function v11jUpgradeLayout() {
   const ui = V11J_UI, S = V11J_SAFE;
   const left = S.left + 24, right = ui.cssW - S.right - 24;
   const w = right - left;
-  const headerH = 84;
+  const headerH = 88;
   const gap = 10;
   const cw = (w - gap * 2) / 3;
   const cardY = S.top + headerH;
@@ -21163,12 +21246,12 @@ function v11jDrawUpgradeCss(g, t) {
   }
   g.restore();
 
-  drawText(g, 'CHOOSE YOUR CAT POWER', ui.cssW / 2, S.top + 14, 13, withAlpha(C.gold, .85),
+  drawText(g, 'CHOOSE YOUR CAT POWER', ui.cssW / 2, S.top + 14, 14, withAlpha(C.gold, .85),
     { align: 'center', weight: 900, line: 0 });
-  drawText(g, '等级提升 · 三选一', ui.cssW / 2, S.top + 46, 40, C.cream,
+  drawText(g, '等级提升 · 三选一', ui.cssW / 2, S.top + 46, 46, C.cream,
     { align: 'center', weight: 900, line: 0 });
   const remaining = run ? run.pendingLevelUps : 1;
-  drawText(g, `猫猫 Lv.${player ? player.level : 1} · 还有 ${remaining} 次选择`, ui.cssW / 2, S.top + 72, 13,
+  drawText(g, `猫猫 Lv.${player ? player.level : 1} · 还有 ${remaining} 次选择`, ui.cssW / 2, S.top + 76, 14,
     withAlpha(C.cream, .68), { align: 'center', weight: 700, line: 0 });
 
   const L = v11jUpgradeLayout();
@@ -21193,15 +21276,15 @@ function v11jDrawUpgradeCss(g, t) {
     const nameSize = 19;
     drawText(g, u.name, textX, iconY + 2, nameSize, C.ink, { weight: 900, line: 0 });
     drawText(g, `Lv.${u.level} → Lv.${u.level + 1}${u.mutate ? ' · 变异' : ''}`,
-      textX, iconY + 22, 13, accent, { weight: 800, line: 0 });
+      textX, iconY + 22, 14, accent, { weight: 800, line: 0 });
     const descW = r.w - (textX - r.x) - 12;
     const maxDesc = Math.max(1, Math.min(4, Math.floor((r.h - 96) / 17)));
-    const descLines = v11jFitLines(g, u.desc, descW, 13, maxDesc);
+    const descLines = v11jFitLines(g, u.desc, descW, 14, maxDesc);
     const descY = r.y + 76;
     descLines.forEach((line, li) => {
-      drawText(g, line, textX, descY + li * 17, 13, C.inkSoft, { weight: 700, line: 0 });
+      drawText(g, line, textX, descY + li * 18, 14, C.inkSoft, { weight: 700, line: 0 });
     });
-    drawText(g, `${i + 1}`, r.x + r.w - 12, r.y + r.h - 12, 13, withAlpha(C.ink, .35),
+    drawText(g, `${i + 1}`, r.x + r.w - 12, r.y + r.h - 12, 14, withAlpha(C.ink, .35),
       { align: 'right', weight: 900, line: 0 });
     g.restore();
     V11J_UI_RECTS.upgrade.push({ id: 'card' + i, x: r.x, y: r.y, w: r.w, h: r.h });
@@ -21221,7 +21304,7 @@ function v11jDrawUpgradeCss(g, t) {
 
   const total = Object.values((run && run.upgradeStacks) || {}).reduce((s, v) => s + v, 0);
   drawText(g, `已装配 ${Object.keys((run && run.upgradeStacks) || {}).length} 种 · 共 ${total} 层增益 · 点击卡片选择`,
-    ui.cssW / 2, L.footerY, 13, withAlpha(C.cream, .5), { align: 'center', weight: 700, line: 0 });
+    ui.cssW / 2, L.footerY, 14, withAlpha(C.cream, .5), { align: 'center', weight: 700, line: 0 });
 }
 
 /* ----- 操控位置编辑 ----- */
@@ -21252,9 +21335,9 @@ function v11jDrawTouchEditCss(g, t) {
   }
   g.restore();
 
-  drawText(g, '调整操控位置', ui.cssW / 2, S.top + 30, 40, C.cream,
+  drawText(g, '调整操控位置', ui.cssW / 2, S.top + 52, 46, C.cream,
     { align: 'center', weight: 900, line: 0 });
-  drawText(g, '拖动左侧摇杆 / 右侧按钮到顺手的位置 · 自动保存', ui.cssW / 2, S.top + 58, 13,
+  drawText(g, '拖动左侧摇杆 / 右侧按钮到顺手的位置 · 自动保存', ui.cssW / 2, S.top + 82, 14,
     withAlpha(C.cream, .6), { align: 'center', weight: 700, line: 0 });
 
   // 左右分区提示
@@ -21263,13 +21346,13 @@ function v11jDrawTouchEditCss(g, t) {
   g.lineWidth = 1.5;
   g.setLineDash([8, 10]);
   g.beginPath();
-  g.moveTo(ui.cssW / 2, S.top + 74);
+  g.moveTo(ui.cssW / 2, S.top + 102);
   g.lineTo(ui.cssW / 2, ui.cssH - 90);
   g.stroke();
   g.restore();
-  drawText(g, '左半屏 · 摇杆', ui.cssW * .25, S.top + 88, 13, withAlpha(C.cream, .7),
+  drawText(g, '左半屏 · 摇杆', ui.cssW * .25, S.top + 112, 14, withAlpha(C.cream, .7),
     { align: 'center', weight: 800, line: 0 });
-  drawText(g, '右半屏 · 攻击 / 冲刺', ui.cssW * .75, S.top + 88, 13, withAlpha(C.cream, .7),
+  drawText(g, '右半屏 · 攻击 / 冲刺', ui.cssW * .75, S.top + 112, 14, withAlpha(C.cream, .7),
     { align: 'center', weight: 800, line: 0 });
 
   // 真实触点
@@ -21307,7 +21390,7 @@ function v11jDrawTouchEditCss(g, t) {
   v11jMenuButton(g, L.reset, '重置位置', '恢复默认布局', C.gold, false);
   V11J_UI_RECTS.touchEdit.push({ id: 'reset', ...L.reset });
   drawText(g, '拖动时实时保存 · 摇杆会随手指浮起，不必固定按在小圆点上', ui.cssW / 2,
-    L.done.y - 14, 13, withAlpha(C.cream, .5), { align: 'center', weight: 700, line: 0 });
+    L.done.y - 14, 14, withAlpha(C.cream, .5), { align: 'center', weight: 700, line: 0 });
 }
 /* ---------------- 12. 输入映射（手机 CSS 空间 / 舞台页逻辑空间） ---------------- */
 const V11J_LEGACY_UPDATE_POINTER = updatePointer;
@@ -21944,6 +22027,26 @@ try {
           out[key] = V11J_UI_RECTS[key].map(r => Object.assign({}, r));
         }
         return out;
+      },
+      /* v1.1.3 补充项：compact 页面包围盒快照，供无重叠 / 安全边距断言使用。 */
+      pageRects: function () {
+        const cp = arr => (Array.isArray(arr) ? arr.map(r => Object.assign({}, r)) : []);
+        const home = {};
+        for (const k of Object.keys(V11_HOME_RECTS)) if (V11_HOME_RECTS[k]) home[k] = Object.assign({}, V11_HOME_RECTS[k]);
+        return {
+          state,
+          space: V11_PROFILE.mobile ? 'css' : 'stage',
+          size: V11_PROFILE.mobile ? { w: V11J_UI.cssW, h: V11J_UI.cssH } : { w: W, h: H },
+          home,
+          settings: cp(settingsRects),
+          story: cp(storyStageRects),
+          mode: cp(V11_MODE_RECTS),
+          save: cp(V11_SAVE_RECTS),
+          changelog: cp(V11_CHANGELOG_RECTS),
+          bestiary: cp(bestiaryRects),
+          shop: cp(V11H_SHOP_RECTS),
+          ui: Object.keys(V11J_UI_RECTS).reduce((o, k) => { o[k] = cp(V11J_UI_RECTS[k]); return o; }, {}),
+        };
       },
       tap: function (x, y, space) {
         if (!window.__nyan || typeof window.__nyan.clickAt !== 'function') return { state };
